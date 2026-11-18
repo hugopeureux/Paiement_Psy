@@ -1,0 +1,2333 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6f6a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Paiements">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Suivi des paiements</title>
+<style>
+:root{
+  /* Jetons repris de CR-1clic, pour que les outils du cabinet se ressemblent.
+     Mise en page : en-tête fixe avec les quatre écrans ; sur chaque écran, l'action ou le résumé d'abord, le détail ensuite. */
+  --bg:#f6f5f2; --card:#fff; --ink:#1f2328; --muted:#646b73; --line:#e3e1dc;
+  --accent:#2f6f6a; --accent-soft:#e3f0ee; --on-accent:#fff;
+  --warn:#9a5b00; --warn-soft:#fdf1dc; --bad:#a33a2b; --bad-soft:#fbe9e6;
+  --vert:#2e7a3a; --vert-soft:#e3f3e5; --jaune:#7a5c00; --jaune-bord:#d4a514; --jaune-soft:#fff4c7;
+  --paper:#fff; --paper-ink:#1a1a1a; --radius:14px;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* graphiques : quatre teintes validées (daltonisme, contraste), dans un ordre fixe */
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ color-scheme:dark;
+    --bg:#16181b; --card:#1f2226; --ink:#e8e6e1; --muted:#9aa0a6; --line:#33373c;
+    --accent:#6bb5ad; --accent-soft:#1f3735; --on-accent:#0f1f1e;
+    --warn:#e0a54a; --warn-soft:#3a2d17; --bad:#ef8f80; --bad-soft:#3b2220; --vert:#7fcf8b; --vert-soft:#1d3322; --jaune:#f0cd5a; --jaune-bord:#c9a02a; --jaune-soft:#3a3214;
+    --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; }
+}
+:root[data-theme="dark"]{ color-scheme:dark;
+  --bg:#16181b; --card:#1f2226; --ink:#e8e6e1; --muted:#9aa0a6; --line:#33373c;
+  --accent:#6bb5ad; --accent-soft:#1f3735; --on-accent:#0f1f1e;
+  --warn:#e0a54a; --warn-soft:#3a2d17; --bad:#ef8f80; --bad-soft:#3b2220; --vert:#7fcf8b; --vert-soft:#1d3322; --jaune:#f0cd5a; --jaune-bord:#c9a02a; --jaune-soft:#3a3214;
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; }
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--font)}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* en-tête et écrans */
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:6px 14px;align-items:center;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;font-weight:650;white-space:nowrap}
+header h1 button{border:0;background:none;padding:0;font-weight:inherit;cursor:pointer}
+.sp{flex:1}
+.btn-notes{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:5px 12px;font-size:14px;cursor:pointer;white-space:nowrap}
+.btn-notes:hover,.btn-notes.on{border-color:var(--accent);background:var(--accent-soft)}
+.btn-notes svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.compte-notes{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.compte-notes[hidden]{display:none}
+.titre-carte{display:flex;justify-content:space-between;align-items:center;gap:8px 16px;flex-wrap:wrap;margin-bottom:6px}
+.titre-carte h3{margin:0}
+.note-carte{border-top:1px solid var(--line);padding:12px 0 6px}
+.note-carte:first-of-type{border-top:0}
+.note-carte.faite .note-texte{color:var(--muted)}
+.note-tete{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px}
+.note-texte{margin:8px 0 4px;white-space:normal;line-height:1.45}
+table.t.suite{margin-top:12px}
+.badge{font-size:12px;font-weight:600;color:var(--warn);background:var(--warn-soft);border-radius:999px;padding:3px 10px;white-space:nowrap}
+.onglets{display:flex;gap:2px;flex-wrap:wrap;font-size:15px}
+.onglets button{border:0;background:none;padding:6px 12px;border-radius:999px;cursor:pointer;color:var(--muted)}
+.onglets button:hover{color:var(--ink)}
+.onglets button.on{background:var(--accent-soft);color:var(--ink);font-weight:600}
+
+main{padding:20px 20px 100px;max-width:1240px;margin:0 auto}
+main.vue-encaissements{max-width:1560px}
+.t.livre th,.t.livre td{padding-left:8px;padding-right:8px}
+.t.livre td:first-child,.t.livre th:first-child .th-btn{padding-left:14px}
+.t.livre .th-btn{padding:10px 8px;gap:4px}
+.t.livre td.act{padding-right:12px}
+.t.livre td.act .btn{margin-left:3px;padding:4px 9px}
+.t.livre td.act .btn.link{padding-left:4px;padding-right:2px}
+.t.livre td.nom{white-space:normal;min-width:110px}
+.t.livre td.presta{min-width:120px}
+@media (max-width:1260px){
+  .t.livre td.act{white-space:normal;width:1%;min-width:166px}
+  .t.livre td:nth-child(8){min-width:0}
+  .t.livre .sous-pill{white-space:normal}
+  .t.livre td:nth-child(8) .pill{white-space:normal;text-align:center}
+  .t.livre td.act .btn{margin:2px 0 2px 3px}
+  .t.livre td.act .btn.link{display:inline-block}
+  .t.livre td:nth-child(9){white-space:normal;min-width:90px}
+}
+h2{margin:0;font-size:22px;text-wrap:balance}
+h3{margin:0 0 10px;font-size:16px}
+h3.suite{margin-top:20px}
+.lead{color:var(--muted);margin:2px 0 0}
+.fil{margin:0 0 2px;font-size:13px}
+.titre{display:flex;gap:12px;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row.fin{justify-content:flex-end;margin-top:14px}
+.col{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;min-width:0}
+.avis{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:9px 14px;font-size:14px;margin:0 0 14px}
+.avis.suite{margin:14px 0 10px}
+section + section,.bloc{margin-top:14px}
+.bloc > h3{margin:22px 0 8px}
+.colonnes{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.colonnes > *{min-width:0}
+.colonnes > section{margin-top:0}
+
+/* boutons et champs */
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:8px 16px;min-height:40px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.sm{padding:4px 11px;min-height:32px;font-weight:500;font-size:14px;border-radius:10px}
+.btn.link{border:0;background:none;color:var(--accent);padding:4px 2px;min-height:0;text-decoration:underline;font-weight:500}
+.btn.danger{color:var(--bad)}
+/* bouton « Déposer en banque » et bandeau de rappel : vert jusqu'à 400 €, jaune jusqu'à 800 €, rouge au-delà */
+.btn.depot.vert,.rappel.vert{background:var(--vert-soft);border-color:var(--vert);color:var(--vert)}
+.btn.depot.jaune,.rappel.jaune{background:var(--jaune-soft);border-color:var(--jaune-bord);color:var(--jaune)}
+.btn.depot.rouge,.rappel.rouge{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.btn.depot.vert,.btn.depot.jaune,.btn.depot.rouge{font-weight:700;border-width:1.5px}
+.btn.depot.vert:hover,.btn.depot.jaune:hover,.btn.depot.rouge:hover{filter:brightness(.97)}
+.rappel{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;border:1.5px solid;border-radius:12px;padding:10px 14px;margin:0 0 14px;font-size:14.5px}
+.rappel .txt{flex:1 1 320px}
+.rappel .txt b{margin-right:4px}
+.rappel .btn.link{color:inherit}
+.sous-pill{display:block;font-size:12px;color:var(--muted);margin-top:3px;white-space:nowrap}
+label.coche{display:flex;align-items:center;gap:12px;cursor:pointer;flex:1 1 auto}
+textarea.haut{min-height:170px}
+.btn:disabled{opacity:.4;cursor:default;border-color:var(--line)}
+input[type=text],input[type=search],input[type=date],input[type=number],input[type=email],input:not([type]),select,textarea{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card);min-height:36px;max-width:100%}
+input:disabled,select:disabled{opacity:.6;background:var(--bg)}
+input.autre-jour{border-color:var(--warn);background:var(--warn-soft)}
+textarea{min-height:70px;resize:vertical}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;height:16px;flex:none}
+.champs{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px 12px;align-items:center;margin:14px 0}
+.champs.large{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
+.champs.moyen{grid-template-columns:190px minmax(0,1fr);max-width:760px}
+.champs label,.champs .lbl{font-size:14px;color:var(--muted)}
+.champs input,.champs select,.champs textarea{width:100%}
+.modes{display:flex;gap:6px 16px;flex-wrap:wrap}
+.modes label{display:inline-flex;gap:8px;align-items:center;color:var(--ink);font-size:15px;padding:7px 14px 7px 11px;border:1px solid var(--line);border-radius:999px;cursor:pointer;background:var(--card)}
+.modes label:hover{border-color:var(--accent)}
+.modes label:has(input:checked){border-color:var(--accent);background:var(--accent-soft);font-weight:600}
+.champs .modes input,.modes input{width:16px;height:16px;margin:0;flex:none}
+.erreur{color:var(--bad);font-size:14px;margin:8px 0 0}
+.erreur:empty{display:none}
+.note{font-size:13px;color:var(--muted);margin:6px 0}
+.note.alerte{color:var(--warn)}
+.total{font-size:14px;margin:10px 0}
+.sous{font-size:13px;font-weight:600;color:var(--muted);margin:16px 0 6px}
+details > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px}
+details > summary::-webkit-details-marker{display:none}
+details > summary::before{content:"›";color:var(--muted);font-size:20px;line-height:1;width:12px;transition:transform .15s}
+details[open] > summary::before{transform:rotate(90deg)}
+details[open] > summary{margin-bottom:10px}
+details > summary h3{margin:0}
+details.aide{margin-top:12px}
+details.aide > summary{font-size:14px;color:var(--accent);font-weight:600}
+
+/* formulaire d'ajout d'une ligne */
+.ajout{display:grid;grid-template-columns:150px minmax(150px,1.3fr) minmax(170px,1.4fr) 110px 200px auto;gap:10px 12px;align-items:end}
+.ajout > div{min-width:0}
+.ajout label{display:block;font-size:13px;color:var(--muted);margin-bottom:3px}
+.ajout input,.ajout select{width:100%}
+.ajout + .note{margin:10px 0 0}
+
+/* listes et tableaux */
+.outils{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card);flex-wrap:wrap}
+.seg button{border:0;background:none;padding:6px 12px;font-size:14px;cursor:pointer;color:var(--muted)}
+.seg button.on{background:var(--accent-soft);color:var(--ink);font-weight:600}
+.mois-nav{display:inline-flex;align-items:center;gap:8px}
+.mois-nav b{min-width:128px;text-align:center}
+.mois-nav b::first-letter{text-transform:uppercase}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--card)}
+table.t{width:100%;border-collapse:collapse;font-size:14px}
+.t th,.t td{padding:8px 12px;text-align:left;border-top:1px solid var(--line);vertical-align:middle}
+.t thead th{border-top:0;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.t tbody tr:first-child td{border-top:0}
+.t thead + tbody tr:first-child td{border-top:1px solid var(--line)}
+.t tr.efface td{color:var(--muted)}
+.t tr.efface td:first-child a{color:var(--muted)}
+.t tfoot td{font-weight:600}
+.t td.act{text-align:right;white-space:nowrap}
+.t td.centre{text-align:center}
+.coche-facture{width:18px;height:18px;margin:0;cursor:pointer;accent-color:var(--accent)}
+.t.livre thead th{background:var(--accent-soft);color:var(--ink);font-size:13px;font-weight:650;padding:0;border-bottom:2px solid var(--accent)}
+.t.livre thead th:first-child{border-top-left-radius:var(--radius)}
+.t.livre thead th:last-child{border-top-right-radius:var(--radius)}
+.t.livre thead th.actif{background:var(--accent);color:var(--on-accent)}
+.th-btn{display:flex;align-items:center;gap:6px;width:100%;border:0;background:none;color:inherit;font:inherit;font-weight:inherit;padding:10px 12px;cursor:pointer;white-space:nowrap;text-align:left}
+.t.livre thead th.num .th-btn{justify-content:flex-end}
+.th-btn:hover{text-decoration:underline;text-underline-offset:3px}
+.th-btn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.th-ind{font-size:10px;opacity:.75;display:inline-flex;gap:3px;align-items:center}
+.th-ind svg{width:12px;height:12px;fill:currentColor}
+th.actif .th-ind{opacity:1}
+.menu-col{position:absolute;z-index:20;min-width:240px;max-width:320px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.18);padding:6px;font-size:14px}
+.menu-titre{font-weight:650;padding:6px 10px 4px}
+.menu-item{display:block;width:100%;text-align:left;border:0;background:none;color:var(--ink);font:inherit;padding:7px 10px;border-radius:8px;cursor:pointer}
+.menu-item:hover,.menu-item:focus-visible{background:var(--accent-soft);outline:none}
+.menu-item.on{font-weight:650}
+.menu-item.on::before{content:'✓ '}
+.menu-item.effacer{color:var(--bad, #b42318);border-top:1px solid var(--line);border-radius:0 0 8px 8px;margin-top:4px}
+.menu-sep{font-size:12px;color:var(--muted);padding:8px 10px 2px;border-top:1px solid var(--line);margin-top:4px}
+.menu-liste{max-height:260px;overflow-y:auto}
+.menu-coche{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:8px;cursor:pointer}
+.menu-coche:hover{background:var(--accent-soft)}
+.menu-coche input{width:16px;height:16px;margin:0;flex:none;accent-color:var(--accent)}
+.menu-coche span:first-of-type{flex:1}
+.filtres-actifs{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin:0 0 10px;font-size:13px}
+.puce{background:var(--accent-soft);border:1px solid var(--accent);border-radius:999px;padding:3px 10px}
+.t td.act .btn{margin-left:4px}
+.t td.etroit{width:130px}
+.t input:not([type=checkbox]),.t select,.t textarea{width:100%;min-width:90px}
+.t textarea{min-width:170px;min-height:52px}
+.num{text-align:right!important;font-variant-numeric:tabular-nums;white-space:nowrap}
+.nowrap{white-space:nowrap}
+.vide{color:var(--muted)}
+.videtxt{color:var(--muted);margin:0;font-size:14px}
+.pied{font-size:13px;color:var(--muted);margin:8px 2px 0}
+.compte{font-size:12px;font-weight:600;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:1px 8px;margin-left:4px;color:var(--muted);vertical-align:1px}
+.liste{list-style:none;margin:0;padding:0}
+.liste li{display:flex;gap:8px 12px;align-items:center;justify-content:space-between;padding:9px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.liste li:first-child{border-top:0;padding-top:0}
+.liste .txt{display:flex;flex-direction:column;min-width:0;flex:1 1 200px}
+.liste .txt span{font-size:13px;color:var(--muted)}
+.liste .act{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+table.leg{width:100%;max-width:600px}
+.leg td{border-top:0!important;padding:4px 8px 4px 0}
+.pill{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.pill.ok{background:var(--accent-soft);color:var(--accent)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.neutre{background:var(--bg);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
+.pill.barre{color:var(--muted);text-decoration:line-through;box-shadow:inset 0 0 0 1px var(--line)}
+
+/* synthèse */
+.tuiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.tuile{display:flex;flex-direction:column;gap:2px;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:var(--radius);padding:14px 16px;min-width:0}
+button.tuile{cursor:pointer}
+button.tuile:hover{border-color:var(--accent)}
+.tuile .lib{font-size:13px;color:var(--muted)}
+.tuile b{font-size:28px;font-weight:650;line-height:1.25}
+.tuile .sub{font-size:13px;color:var(--muted)}
+.tuile.alerte b{color:var(--bad)}
+.jauge{height:6px;border-radius:3px;background:var(--line);margin:6px 0 4px;overflow:hidden}
+.jauge i{display:block;height:100%;border-radius:3px;background:var(--warn)}
+.jauge i.ok{background:var(--accent)}
+.graph{overflow:hidden}
+.graph svg{display:block;font-family:inherit}
+.g-grille{stroke:var(--line);stroke-width:1}
+.g-base{stroke:var(--muted);stroke-width:1;opacity:.6}
+.g-axe{fill:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.g-axe.on,.g-valeur,.g-etiq{fill:var(--ink);font-size:13px;font-weight:600}
+.halo{paint-order:stroke;stroke:var(--card);stroke-width:4px;stroke-linejoin:round}
+.g-barre{fill:var(--accent);opacity:.42}
+.g-barre.on{opacity:1}
+.g-seuil{stroke:var(--ink);stroke-width:1.5;stroke-dasharray:5 4;opacity:.65}
+.g-zone{fill:transparent;cursor:pointer;outline-offset:-2px}
+.g-zone:hover{fill:var(--ink);fill-opacity:.05}
+.barre-parts{display:flex;gap:2px;height:22px;margin:4px 0 12px}
+.barre-parts i{border-radius:4px;min-width:3px}
+.c1{background:var(--c1)}.c2{background:var(--c2)}.c3{background:var(--c3)}.c4{background:var(--c4)}
+.pastille{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px}
+#bulle{position:fixed;z-index:30;background:var(--ink);color:var(--bg);padding:6px 10px;border-radius:8px;font-size:13px;pointer-events:none;max-width:280px}
+
+/* fenêtres, messages */
+dialog{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);color:var(--ink);padding:22px;width:min(580px,calc(100vw - 32px));max-height:calc(100% - 32px);overflow:auto}
+dialog.large{width:min(860px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(20,22,25,.45)}
+dialog h3{font-size:18px;margin-bottom:4px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;max-width:min(560px,calc(100vw - 32px));opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+#toast.on{opacity:1}
+#toast.bad{background:var(--bad);color:#fff}
+:root[data-theme="dark"] #toast.bad{color:#1a1010}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) #toast.bad{color:#1a1010} }
+
+/* facture */
+.deux{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+.deux>*{min-width:0}
+.cote{display:flex;flex-direction:column;gap:12px}
+.cote select,.cote input,.cote textarea{width:100%;min-width:0}
+.cote .card{padding:16px}
+.cote dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0 0 12px;font-size:14px;align-items:center}
+.cote dt{color:var(--muted)}
+.cote dd{margin:0}
+.cote #mail-texte{min-height:176px;font-size:14px}
+.cote .note{margin:2px 0 0}
+.cote label.note{margin-top:4px}
+.fait{font-size:13.5px;color:var(--accent);font-weight:600;margin:2px 0 0}
+.papier{position:relative;background:var(--paper);color:var(--paper-ink);border:1px solid var(--line);border-radius:6px;padding:48px 52px;min-height:640px;box-shadow:0 1px 6px rgba(0,0,0,.08);overflow:hidden;font-size:15px}
+.papier .specimen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:700;color:rgba(163,58,43,.12);transform:rotate(-24deg);pointer-events:none;text-transform:uppercase;letter-spacing:.06em;text-align:center;line-height:1.15}
+.papier small{color:#555}
+.p-tete{display:flex;justify-content:space-between;gap:24px;margin-bottom:34px}
+.p-num{text-align:right;white-space:nowrap}
+.p-num b{font-size:21px}
+.p-dest{margin:0 0 28px 52%}
+.p-dest span{display:block;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:.05em}
+table.p{width:100%;border-collapse:collapse}
+.p th,.p td{padding:8px 6px;border-bottom:1px solid #d9d9d9;text-align:left;vertical-align:top}
+.p thead th{font-size:12px;color:#555;text-transform:uppercase;letter-spacing:.05em}
+.p tfoot th{border-bottom:0;font-size:17px;padding-top:12px}
+.p-mention{font-size:13px;color:#555;margin:18px 0 0}
+.p-regl{margin:16px 0 0;font-weight:600}
+.p-pied{margin-top:28px;font-size:13px;color:#555;white-space:pre-line}
+
+@media (max-width:1040px){
+  .ajout{grid-template-columns:1fr 1fr}
+  .ajout .fin{grid-column:1/-1}
+}
+@media (max-width:900px){
+  .tuiles{grid-template-columns:repeat(2,1fr)}
+  .colonnes,.deux{grid-template-columns:1fr}
+}
+@media (max-width:520px){
+  .tuiles{grid-template-columns:1fr}
+  main{padding:16px 16px 80px}
+  .champs,.champs.large,.champs.moyen{grid-template-columns:1fr;gap:4px 0}
+  .champs input,.champs select,.champs textarea,.champs .modes{margin-bottom:8px}
+  .ajout{grid-template-columns:1fr}
+  .papier{padding:24px 18px}
+  .p-dest{margin-left:0}
+  .p-tete{flex-direction:column}
+  .p-num{text-align:left}
+}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+@media print{
+  header,.noprint,#toast,#bulle,dialog{display:none!important}
+  html,body{background:#fff}
+  main{padding:0;max-width:none}
+  .deux{display:block}
+  .papier{border:0;box-shadow:none;border-radius:0;padding:0;min-height:0}
+}
+
+/* version en ligne : écran verrouillé, rappel de sauvegarde, bandeau de mise à jour */
+main.vue-verrou{max-width:520px}
+.verrou{padding-top:6vh}
+.verrou h2{margin:0 0 6px}
+.champs-verrou{display:flex;flex-direction:column;gap:6px;margin:14px 0 4px}
+.champs-verrou input[type=password]{font-size:17px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+.champs-verrou label.coche{margin-top:8px;font-size:14px}
+.champs-verrou .btn.pri{margin-top:6px;align-self:flex-start}
+.lien-btn{color:var(--accent);text-decoration:underline;cursor:pointer}
+.rappel.sauve{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.maj{position:sticky;top:0;z-index:6;background:var(--accent);color:var(--on-accent);padding:8px 16px;display:flex;gap:12px;align-items:center;justify-content:center;font-size:14px}
+.maj[hidden],.badge[hidden],.btn-notes[hidden]{display:none}
+@supports (padding:max(0px)){ header{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))} }
+
+/* téléphone : une carte par rendez-vous ; les en-têtes deviennent des pastilles pour trier et filtrer */
+.mobile-seul{display:none}
+.lab-fact{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+@media (max-width:720px){
+  .t.livre,.t.livre tbody,.t.livre tfoot{display:block}
+  .tablewrap:has(.t.livre){border:0;background:none;overflow:visible}
+  .t.livre thead{display:block}
+  .t.livre thead tr{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .t.livre thead th{border:1px solid var(--accent)!important;border-radius:999px!important;background:var(--card)}
+  .t.livre thead th.actif{background:var(--accent)}
+  .t.livre thead th:last-child{display:none}
+  .t.livre .th-btn{padding:6px 12px!important;font-size:13px}
+  .t.livre tbody tr{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-areas:"date nom nom nom statut statut" "presta presta presta presta presta presta" "mont mont verse verse reste reste" "paye paye paye depot depot depot" "fact fact fact act act act";
+    gap:6px 12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+  .t.livre tbody tr.du{border-left:4px solid var(--bad)}
+  .t.livre tbody tr.du{grid-template-areas:"date nom nom nom statut statut" "presta presta presta presta presta presta" "mont mont verse verse reste reste" "paye paye paye depot depot depot" "fact fact fact fact fact fact" "act act act act act act"}
+  .t.livre tbody td{display:block;width:auto!important;border:0!important;padding:0!important;min-width:0!important;white-space:normal!important;text-align:left}
+  .t.livre td.c-date{grid-area:date;color:var(--muted);font-size:13px}
+  .t.livre td.c-nom{grid-area:nom;font-weight:650;font-size:16px}
+  .t.livre td.c-statut{grid-area:statut;text-align:right}
+  .t.livre td.c-presta{grid-area:presta;color:var(--muted);font-size:14px}
+  .t.livre td.c-mont{grid-area:mont;text-align:left!important}.t.livre td.c-verse{grid-area:verse;text-align:center!important}.t.livre td.c-reste{grid-area:reste;text-align:right!important}
+  .t.livre td.c-paye{grid-area:paye;font-size:13px}.t.livre td.c-depot{grid-area:depot;text-align:right!important}
+  .t.livre td[data-l]::before{content:attr(data-l);display:block;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+  .t.livre td.c-paye::before,.t.livre td.c-depot::before{display:inline;margin-right:6px}
+  .t.livre td.c-fact{grid-area:fact;font-size:13px}
+  .t.livre td.act{grid-area:act;width:auto!important;display:flex!important;justify-content:flex-end;align-items:center;gap:6px;flex-wrap:wrap}
+  .t.livre td.act .btn{margin:0!important;min-height:38px}
+  .t.livre td.act .btn.link{padding:4px 2px!important}
+  .mobile-seul{display:inline}
+  .t.livre tfoot tr{display:flex;flex-wrap:wrap;gap:4px 14px;padding:8px 4px;font-weight:600}
+  .t.livre tfoot td{border:0;padding:0}
+  .t.livre tfoot td[data-l]::before{display:inline;margin-right:4px}
+  .t.livre tfoot td:empty{display:none}
+  .t.livre tbody td.videtxt{grid-column:1/-1}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1><button type="button" data-a="aller" data-vue="encaissements">Suivi des paiements</button></h1>
+  <nav class="onglets" id="onglets" aria-label="Écrans"></nav>
+  <span class="sp"></span>
+  <button type="button" class="btn-notes" id="btn-notes" data-a="notes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg>Notes<span class="compte-notes" id="notes-compte" hidden></span></button>
+  <button type="button" class="btn-notes" id="btn-verrou" data-a="verrouiller" hidden title="Verrouiller le livre : le mot de passe sera redemandé"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Verrouiller</button>
+  <span class="badge" id="badge">Prototype</span>
+</header>
+<div class="maj" id="maj" role="status" hidden>Nouvelle version de l’outil installée. <button type="button" class="btn sm pri" onclick="location.reload()">Recharger</button></div>
+<main id="page"></main>
+<dialog id="dlg"></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="bulle" role="tooltip" hidden></div>
+<script>window.SUIVI_PROD = true;</script>
+<script>
+/* Suivi des paiements : noyau.
+   Calculs purs, sans accès à la page : testés avec Node (outils/test_noyau.js).
+   Conventions : montants en centimes (entiers), dates « AAAA-MM-JJ », mois « AAAA-MM ».
+   Une ligne = un rendez-vous : son montant, ce qui a été versé (en une ou plusieurs fois) et, pour les chèques et les espèces,
+   la date du dépôt en banque. Les factures se font dans Docorga (décision du 2026-11-14) : l'outil ne numérote rien. */
+(function (racine) {
+  'use strict';
+
+  const MODES = ['especes', 'cheque', 'virement'];
+  const NOM_MODE = { especes: 'Espèces', cheque: 'Chèque', virement: 'Virement' };
+  const NOM_STATUT = { payee: 'Payée', partielle: 'Partiellement payée', impayee: 'Impayée' };
+  const ABATTEMENT_BNC = 34;   // micro-BNC : l'impôt porte sur 66 % des recettes
+  const JOURS_RAPPEL = 3;      // le rappel de dépôt apparaît les trois derniers jours du mois
+  // La relance d'un impayé par mail. Les mots entre accolades sont remplacés pour chaque patient :
+  // {patient}, {montant} (le total dû), {details} (une ligne par rendez-vous impayé).
+  const RELANCE_OBJET = 'Règlement en attente';
+  const RELANCE_TEXTE = 'Bonjour,\n\nSauf erreur de ma part, il reste à régler :\n{details}\n\nTotal : {montant}.\n\nVous pouvez régler par virement, ou lors de notre prochain rendez-vous par chèque ou en espèces. Si le règlement a été fait entre-temps, merci de ne pas tenir compte de ce message.\n\nBien cordialement,';
+  const MAIL_INCOMPLET = 'Adresse e-mail incomplète : écrivez par exemple prenom.nom' + '@' + 'exemple.fr.';   // jamais d'adresse en clair dans les sources (garde-fou Git)
+  const MESSAGERIES = ['appli', 'gmail'];   // Mail ou Outlook sur l'ordinateur (lien « mailto »), ou Gmail dans le navigateur
+
+  // ---------- dates ----------
+  const pad = n => String(n).padStart(2, '0');
+  const iso = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  const deIso = s => { const p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); };
+  const ajouterJours = (s, n) => { const d = deIso(s); d.setDate(d.getDate() + n); return iso(d); };
+  const lundiDe = s => ajouterJours(s, -((deIso(s).getDay() + 6) % 7));
+  const ajouterMois = (m, n) => { const d = new Date(+m.slice(0, 4), +m.slice(5, 7) - 1 + n, 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); };
+  const finDeMois = m => iso(new Date(+m.slice(0, 4), +m.slice(5, 7), 0));
+  const ecartJours = (a, b) => Math.round((deIso(b) - deIso(a)) / 86400000);
+  const estDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && iso(deIso(s)) === s;
+  const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const dateFr = s => { if (!s) return ''; const p = s.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; };
+  const nomMois = m => MOIS[+m.slice(5, 7) - 1] + ' ' + m.slice(0, 4);
+
+  // ---------- montants ----------
+  function versCentimes(v) {
+    if (typeof v === 'number') return isFinite(v) && v >= 0 ? Math.round(v * 100) : null;
+    const t = String(v == null ? '' : v).replace(/[\s  €]/g, '').replace(',', '.');
+    if (!/^\d{1,7}(\.\d{1,2})?$/.test(t)) return null;   // au plus 9 999 999,99 € : une faute de frappe ne crée pas un montant absurde
+    return Math.round(parseFloat(t) * 100);
+  }
+  function versTaux(v) {   // « 23,4 » -> 23.4 ; vide ou invalide -> null
+    const t = String(v == null ? '' : v).replace(/[\s  %]/g, '').replace(',', '.');
+    if (!/^\d+(\.\d+)?$/.test(t)) return null;
+    const n = parseFloat(t);
+    return n >= 0 && n < 100 ? n : null;
+  }
+  // Jours de consultation par semaine : un nombre de 0,5 à 7, avec au plus deux décimales (« 2,5 » pour deux jours et demi).
+  function versJours(v) {
+    const t = String(v == null ? '' : v).replace(/[\s  ]/g, '').replace(',', '.');
+    if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
+    const n = parseFloat(t);
+    return n >= 0.5 && n <= 7 ? n : null;
+  }
+  function nombre(c, toujoursDecimales) {
+    const a = Math.abs(Math.round(c)), ent = Math.floor(a / 100), ct = a % 100;
+    const s = String(ent).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return (Math.round(c) < 0 ? '−' : '') + s + (ct || toujoursDecimales ? ',' + pad(ct) : '');
+  }
+  const euros = c => nombre(c, false) + ' €';
+  const eurosFixe = c => nombre(c, true) + ' €';
+  const saisie = c => nombre(c, false).replace(/ /g, '');
+  const csvMontant = c => (c / 100).toFixed(2).replace('.', ',');
+  const sansAccent = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const propre = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  // Deux écritures du même nom donnent la même clé : accents, majuscules, ponctuation et ordre des mots ne comptent pas.
+  const cleNom = s => sansAccent(s).replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean).sort().join(' ');
+
+  const SEMAINES_AN = 52, JOURS_CONGES_MAX = 200;
+
+  // ---------- chiffrement du livre (version en ligne) ----------
+  // Le livre est chiffré sur l'appareil avant d'être gardé : AES-GCM 256 bits, clé tirée du mot de passe par
+  // PBKDF2-SHA-256 (310 000 tours, sel de 16 octets), un vecteur neuf à chaque enregistrement. Le mot de passe
+  // n'est gardé nulle part : oublié, il ne se retrouve pas ; seule une sauvegarde (chiffrée de la même façon) sert.
+  const CHIFFRE_FORMAT = 'hadipsy-suivi-chiffre', CHIFFRE_TOURS = 310000, MDP_MIN = 8;
+  const subtil = () => { const c = typeof crypto !== 'undefined' ? crypto : null; if (!c || !c.subtle) throw new Error('Ce navigateur ne sait pas chiffrer : ouvrez l’outil dans Safari ou Chrome à jour, à son adresse https.'); return c; };
+  const versB64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+  const deB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  function mdpValide(m) {
+    if (typeof m !== 'string' || m.length < MDP_MIN) throw new Error('Le mot de passe doit faire au moins ' + MDP_MIN + ' caractères.');
+    return m;
+  }
+  async function deriver(mdp, sel, tours) {
+    const c = subtil(), base = await c.subtle.importKey('raw', new TextEncoder().encode(String(mdp).normalize('NFC')), 'PBKDF2', false, ['deriveKey']);
+    return c.subtle.deriveKey({ name: 'PBKDF2', salt: sel, iterations: tours, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+  // Une clé neuve (nouveau sel) pour un nouveau mot de passe.
+  async function nouvelleCle(mdp) { mdpValide(mdp); const sel = subtil().getRandomValues(new Uint8Array(16)); return { cle: await deriver(mdp, sel, CHIFFRE_TOURS), sel: sel, tours: CHIFFRE_TOURS }; }
+  async function chiffrer(cle, texte) {
+    const c = subtil(), iv = c.getRandomValues(new Uint8Array(12));
+    const d = await c.subtle.encrypt({ name: 'AES-GCM', iv: iv }, cle.cle, new TextEncoder().encode(texte));
+    return { format: CHIFFRE_FORMAT, version: 1, kdf: 'PBKDF2-SHA-256', tours: cle.tours, sel: versB64(cle.sel), iv: versB64(iv), donnees: versB64(new Uint8Array(d)) };
+  }
+  const estEnveloppe = o => !!o && o.format === CHIFFRE_FORMAT && o.version === 1 && Number.isInteger(o.tours) && o.tours >= 100000 && o.tours <= 10000000 &&
+    ['sel', 'iv', 'donnees'].every(k => typeof o[k] === 'string' && /^[A-Za-z0-9+/]+=*$/.test(o[k]));
+  // Rouvre une enveloppe : rend le texte et la clé (pour réenregistrer sans redemander le mot de passe).
+  async function dechiffrer(env, mdp) {
+    if (!estEnveloppe(env)) throw new Error('Ce n’est pas un livre chiffré de l’outil.');
+    const sel = deB64(env.sel), cle = { cle: await deriver(mdp, sel, env.tours), sel: sel, tours: env.tours };
+    let d;
+    try { d = await subtil().subtle.decrypt({ name: 'AES-GCM', iv: deB64(env.iv) }, cle.cle, deB64(env.donnees)); }
+    catch (x) { throw new Error('Mot de passe incorrect.'); }
+    return { texte: new TextDecoder().decode(d), cle: cle };
+  }
+  // Même clé, enveloppe déjà gardée : pour relire ce qu'une autre fenêtre vient d'enregistrer.
+  async function dechiffrerAvec(cle, env) {
+    if (!estEnveloppe(env) || versB64(cle.sel) !== env.sel) throw new Error('Clé différente.');
+    const d = await subtil().subtle.decrypt({ name: 'AES-GCM', iv: deB64(env.iv) }, cle.cle, deB64(env.donnees));
+    return new TextDecoder().decode(d);
+  }
+
+  // ---------- notes d'amélioration ----------
+  // Rangées à part du livre (autre clé de mémoire) : un livre vidé, restauré ou remplacé par l'exemple garde les notes,
+  // et le fichier des notes ne contient jamais le livre.
+  const NOTE_TYPES = { idee: 'Amélioration', bug: 'Bug', question: 'Question' };
+  const NOTE_MAX = 3000;
+  const notesVides = () => ({ version: 1, compteur: 0, notes: [] });
+  function relireNotes(o) {
+    if (!o || o.version !== 1 || !Array.isArray(o.notes) || !estEntier(o.compteur)) return notesVides();
+    const vues = {};
+    const notes = o.notes.filter(n => n && estId(n.id) && !vues[n.id] && (vues[n.id] = true) && NOTE_TYPES[n.type] && typeof n.texte === 'string' && n.texte.trim() &&
+      Number.isFinite(n.cree) && Number.isFinite(n.modifie)).map(n => ({ id: n.id, type: n.type, ecran: String(n.ecran || '').slice(0, 200), texte: n.texte.slice(0, NOTE_MAX), cree: n.cree, modifie: n.modifie, faite: !!n.faite }));
+    return { version: 1, compteur: Math.max(o.compteur, ...notes.map(n => rangId(n.id)), 0), notes: notes };
+  }
+  const texteNote = t => { const v = String(t == null ? '' : t).trim(); if (!v) throw new Error('Écrivez la note avant de l’enregistrer.'); return v.slice(0, NOTE_MAX); };
+  const typeNote = t => { if (!NOTE_TYPES[t]) throw new Error('Type de note inconnu.'); return t; };
+  const laNote = (c, id) => { const n = c.notes.find(x => x.id === id); if (!n) throw new Error('Note introuvable.'); return n; };
+  function ajouterNote(c, o, quand) {
+    const type = typeNote(o.type || 'idee'), texte = texteNote(o.texte);   // une note refusée ne consomme pas de numéro
+    const n = { id: 'n' + (++c.compteur), type: type, ecran: String(o.ecran || '').slice(0, 200), texte: texte, cree: quand, modifie: quand, faite: false };
+    c.notes.push(n);
+    return n;
+  }
+  function modifierNote(c, id, o, quand) { const n = laNote(c, id), t = typeNote(o.type || n.type), x = texteNote(o.texte); n.type = t; n.texte = x; n.modifie = quand; return n; }
+  function basculerNote(c, id, quand) { const n = laNote(c, id); n.faite = !n.faite; n.modifie = quand; return n; }
+  function supprimerNote(c, id) { laNote(c, id); c.notes = c.notes.filter(x => x.id !== id); }
+  const notesOuvertes = c => c.notes.filter(n => !n.faite);
+  // Ce qui, dans une note, ressemble à une donnée de patient : un mot du nom d'un patient du livre (3 lettres et plus),
+  // une adresse e-mail ou un numéro de téléphone. L'outil prévient, sans bloquer.
+  function donneesDansNote(e, texte) {
+    const mots = {}, trouves = [];
+    sansAccent(texte).split(/[^a-z0-9]+/).forEach(m => { if (m) mots[m] = true; });
+    (e ? e.patients : []).forEach(p => { if (sansAccent(p.nom).split(/[^a-z0-9]+/).some(m => m.length >= 3 && mots[m])) trouves.push(p.nom); });
+    if (/[^\s@]+@[^\s@]+\.[a-z]{2,}/i.test(texte)) trouves.push('une adresse e-mail');
+    if (/(?:\+33|\b0)[1-9](?:[\s.-]?\d{2}){4}\b/.test(texte)) trouves.push('un numéro de téléphone');
+    return trouves;
+  }
+  const horodatage = ms => { const d = new Date(ms); return dateFr(iso(d)) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  function texteNotes(c, maintenant) {
+    const fmt = n => '[' + horodatage(n.cree) + '] ' + NOTE_TYPES[n.type] + (n.faite ? ' (réglée)' : '') + '\n  Où : ' + (n.ecran || '—') + '\n  ' + n.texte.replace(/\r?\n/g, '\n  ');
+    const ouvertes = c.notes.filter(n => !n.faite), faites = c.notes.filter(n => n.faite);
+    return 'Notes de l’outil Suivi des paiements\nExportées le ' + horodatage(maintenant) + '\n\n== À traiter (' + ouvertes.length + ') ==\n\n' + (ouvertes.map(fmt).join('\n\n') || '(aucune)') +
+      '\n\n== Réglées (' + faites.length + ') ==\n\n' + (faites.map(fmt).join('\n\n') || '(aucune)') + '\n';
+  }
+
+  // ---------- état ----------
+  function etatVide() {
+    return { version: 3, demo: null, params: { urssaf: 23.4, impot: null, revenuVise: null, joursSemaine: 5, conges: null, fixes: [] }, mail: { messagerie: 'appli', objet: RELANCE_OBJET, texte: RELANCE_TEXTE }, compteurs: { id: 0 }, prestations: [], patients: [], lignes: [] };
+  }
+  // Les réglages du cabinet tels que Hala les a donnés le 2026-11-13 (tarifs, charges fixes, taux Urssaf).
+  function reglagesCabinet(e) {
+    const P = (id, libelle, tarif, plus) => e.prestations.push(Object.assign({ id: id, libelle: libelle, tarif: tarif * 100, premier: false, inclutPremier: false }, plus || {}));
+    P('premier-psy', '1er rendez-vous de psychothérapie', 80);
+    P('suivi', 'Consultation de suivi', 80);
+    P('premier-bilan', '1er rendez-vous de bilan', 80, { premier: true });
+    P('bilan-tsa', 'Bilan TSA', 680, { inclutPremier: true });
+    P('bilan-tdah', 'Bilan TDAH', 450, { inclutPremier: true });
+    P('bilan-tsa-tdah', 'Bilan TSA + TDAH', 900, { inclutPremier: true });
+    []
+      .forEach(f => e.params.fixes.push({ id: nouvelId(e, 'c'), libelle: f[0], montant: f[1] * 100 }));
+    e.params.urssaf = 23.4;
+    return e;
+  }
+
+  // Un livre de la version 2 (avec factures numérotées) devient un livre de la version 3 : numéros, envois, mentions et
+  // coordonnées du cabinet et des patients sont abandonnés ; une ligne annulée (jamais payée) disparaît.
+  function migrer(o) {
+    if (!o || o.version !== 2 || !Array.isArray(o.lignes) || !Array.isArray(o.patients) || !o.compteurs) return o;
+    return {
+      version: 3, demo: o.demo || null, params: o.params, compteurs: { id: o.compteurs.id }, prestations: o.prestations,
+      patients: o.patients.map(p => p && { id: p.id, nom: p.nom, email: adresseValide(p.email) ? p.email : '' }),
+      lignes: o.lignes.filter(l => l && !l.annulee).map(l => ({ id: l.id, date: l.date, patientId: l.patientId, prestationId: l.prestationId, libelle: l.libelle, tarif: l.tarif == null ? null : l.tarif, montant: l.montant, versements: l.versements, note: l.note || '' }))
+    };
+  }
+
+  // Une sauvegarde n'est acceptée que si chaque ligne est complète et cohérente : un fichier abîmé ne casse pas l'outil.
+  const estId = s => typeof s === 'string' && /^[a-z0-9-]+$/.test(s);
+  const estEntier = n => Number.isInteger(n) && n >= 0;
+  function estEtat(o) {
+    try {
+      if (!o || o.version !== 3 || !o.params || !Array.isArray(o.params.fixes) || !o.compteurs || !estEntier(o.compteurs.id)) return false;
+      if (!['impot', 'revenuVise'].every(k => o.params[k] == null || (typeof o.params[k] === 'number' && o.params[k] >= 0))) return false;
+      if (o.params.impot != null && !(o.params.impot < 100)) return false;
+      if (o.params.joursSemaine != null && versJours(o.params.joursSemaine) !== o.params.joursSemaine) return false;
+      if (o.params.conges != null && !(Number.isInteger(o.params.conges) && o.params.conges >= 0 && o.params.conges <= JOURS_CONGES_MAX)) return false;
+      if (typeof o.params.urssaf !== 'number' || !(o.params.urssaf >= 0 && o.params.urssaf < 100)) return false;
+      if (!['prestations', 'patients', 'lignes'].every(k => Array.isArray(o[k]))) return false;
+      const patients = {}, ids = {};
+      const neuf = id => estId(id) && !ids[id] && (ids[id] = true);   // un identifiant ne sert qu'une fois dans tout le fichier
+      if (!o.patients.every(p => p && neuf(p.id) && typeof p.nom === 'string' && (p.email == null || p.email === '' || adresseValide(p.email)) && (patients[p.id] = true))) return false;
+      if (o.mail != null && (typeof o.mail !== 'object' || ['objet', 'texte'].some(k => o.mail[k] != null && typeof o.mail[k] !== 'string'))) return false;
+      if (!o.prestations.every(t => t && neuf(t.id) && typeof t.libelle === 'string' && estEntier(t.tarif))) return false;
+      if (!o.params.fixes.every(f => f && neuf(f.id) && typeof f.libelle === 'string' && estEntier(f.montant))) return false;
+      return o.lignes.every(l => l && neuf(l.id) && estDate(l.date) && patients[l.patientId] && estId(l.prestationId) && typeof l.libelle === 'string' && estEntier(l.montant) && (l.tarif == null || estEntier(l.tarif)) &&
+        (l.relanceLe == null || estDate(l.relanceLe)) && (l.facture == null || typeof l.facture === 'boolean') &&
+        Array.isArray(l.versements) && l.versements.every(v => v && neuf(v.id) && estDate(v.date) && estEntier(v.montant) && MODES.indexOf(v.mode) >= 0 && (v.deposeLe == null || estDate(v.deposeLe))));
+    } catch (x) { return false; }
+  }
+  // Les lignes restent rangées par date ; le même jour, dans l'ordre où elles ont été saisies.
+  const rangId = id => { const m = /(\d+)$/.exec(id); return m ? +m[1] : 0; };
+  const ordre = (a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : rangId(a.id) - rangId(b.id);
+  // Complète ce qu'une version précédente n'enregistrait pas encore, et remet d'aplomb l'ordre des lignes et le compteur.
+  function normaliser(e) {
+    e.prestations.forEach(t => { t.premier = !!t.premier; t.inclutPremier = !!t.inclutPremier; });
+    e.patients.forEach(p => { p.email = p.email || ''; });
+    e.mail = Object.assign({ messagerie: 'appli', objet: RELANCE_OBJET, texte: RELANCE_TEXTE }, e.mail || {});
+    if (MESSAGERIES.indexOf(e.mail.messagerie) < 0) e.mail.messagerie = 'appli';
+    e.lignes.forEach(l => { l.note = l.note || ''; if (l.tarif === undefined) l.tarif = null; l.relanceLe = l.relanceLe || null; if (l.facture == null) l.facture = true; l.versements.forEach(v => { v.deposeLe = v.deposeLe || null; }); });
+    if (e.params.impot === undefined) e.params.impot = null;
+    if (e.params.revenuVise === undefined) e.params.revenuVise = null;
+    if (e.params.joursSemaine == null) e.params.joursSemaine = 5;
+    if (e.params.conges === undefined) e.params.conges = null;
+    e.lignes.sort(ordre);
+    let maxId = e.compteurs.id;
+    const voir = id => { if (rangId(id) > maxId) maxId = rangId(id); };   // aucun identifiant à venir ne doit en répéter un
+    e.patients.forEach(p => voir(p.id)); e.prestations.forEach(t => voir(t.id)); e.params.fixes.forEach(f => voir(f.id));
+    e.lignes.forEach(l => { voir(l.id); l.versements.forEach(v => voir(v.id)); });
+    e.compteurs.id = maxId;
+    return e;
+  }
+  // Ce que l'outil relit : un livre de la version 3, ou de la version 2 converti. null si rien de valable.
+  function relire(o) { const m = migrer(o); return estEtat(m) ? normaliser(m) : null; }
+
+  const nouvelId = (e, prefixe) => prefixe + (++e.compteurs.id);
+  const par = (liste, id) => liste.find(x => x.id === id) || null;
+  const parDate = (a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+  const nomPatient = p => p ? p.nom : 'Patient inconnu';
+  const libellePrestation = (e, id) => { const t = par(e.prestations, id); return t ? t.libelle : 'Prestation'; };
+
+  // ---------- patients ----------
+  function trouverPatient(e, nom) { const k = cleNom(nom); return k ? (e.patients.find(p => cleNom(p.nom) === k) || null) : null; }
+  function patientPour(e, nom) {   // le patient de ce nom, créé s'il n'existe pas
+    const n = propre(nom);
+    if (!cleNom(n)) throw new Error('Indiquez le patient.');
+    const p = trouverPatient(e, n);
+    if (p) return p;
+    const neuf = { id: nouvelId(e, 'p'), nom: n, email: '' };
+    e.patients.push(neuf);
+    return neuf;
+  }
+  // Une fiche créée à l'avance, sans ligne. Un nom déjà présent (même autrement écrit) est refusé.
+  function ajouterPatient(e, nom, email) {
+    const autre = trouverPatient(e, nom), m = String(email == null ? '' : email).trim();
+    if (autre) throw new Error('« ' + autre.nom + ' » est déjà dans la liste des patients.');
+    if (m && !adresseValide(m)) throw new Error(MAIL_INCOMPLET);
+    const p = patientPour(e, nom);
+    p.email = m;
+    return p;
+  }
+  // Une adresse écrite simplement, sans rien qui puisse se glisser dans les en-têtes d'un mail.
+  const adresseValide = s => /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(String(s || ''));
+  // L'adresse e-mail d'un patient : vide, ou une adresse complète.
+  function changerEmail(e, id, email) {
+    const p = par(e.patients, id), m = String(email == null ? '' : email).trim();
+    if (!p) throw new Error('Patient introuvable.');
+    if (m && !adresseValide(m)) throw new Error(MAIL_INCOMPLET);
+    p.email = m;
+    return p;
+  }
+  const lignesDe = (e, patientId) => e.lignes.filter(l => l.patientId === patientId);
+  // Le nouveau nom vaut pour toutes les lignes du patient. S'il désigne déjà une autre fiche, l'erreur porte son identifiant (doublon).
+  function renommerPatient(e, id, nom) {
+    const p = par(e.patients, id), n = propre(nom);
+    if (!p) throw new Error('Patient introuvable.');
+    if (!cleNom(n)) throw new Error('Indiquez le nom du patient.');
+    const autre = trouverPatient(e, n);
+    if (autre && autre.id !== id) { const err = new Error('Une autre fiche porte déjà le nom « ' + autre.nom + ' ».'); err.doublon = autre.id; throw err; }
+    p.nom = n;
+    return p;
+  }
+  function fusionnerPatients(e, gardeId, retireId) {
+    const g = par(e.patients, gardeId), r = par(e.patients, retireId);
+    if (!g || !r || g === r) throw new Error('Fiches introuvables.');
+    e.lignes.forEach(l => { if (l.patientId === retireId) l.patientId = gardeId; });
+    g.email = g.email || r.email || '';
+    e.patients = e.patients.filter(p => p.id !== retireId);
+    return g;
+  }
+  function supprimerPatient(e, id) {
+    if (lignesDe(e, id).length) throw new Error('Ce patient a des lignes dans le livre : sa fiche ne peut pas être retirée.');
+    e.patients = e.patients.filter(p => p.id !== id);
+  }
+
+  // ---------- lignes du livre ----------
+  const verse = l => l.versements.reduce((s, v) => s + v.montant, 0);
+  const reste = l => Math.max(0, l.montant - verse(l));
+  const statut = l => verse(l) >= l.montant ? 'payee' : verse(l) > 0 ? 'partielle' : 'impayee';
+  const dernierVersement = l => l.versements.reduce((d, v) => (!d || v.date >= d.date) ? v : d, null);
+  const modesDe = l => l.versements.map(v => v.mode).filter((m, i, t) => t.indexOf(m) === i);
+
+  // Un bilan « comprend le 1er rendez-vous » : on propose le tarif moins le 1er rendez-vous déjà compté pour ce patient.
+  // Un 1er rendez-vous ne sert qu'une fois : seuls comptent ceux qui suivent le dernier bilan du patient.
+  // o.sauf : la ligne que l'on modifie (seules comptent celles d'avant) ; o.date : la date de la ligne à venir ;
+  // o.tarif : le tarif retenu quand la ligne a été faite, s'il a changé depuis.
+  function montantPropose(e, patientId, prestationId, o) {
+    const t = par(e.prestations, prestationId);
+    if (!t) return { montant: 0, deduit: 0, tarif: 0 };
+    const tarif = o && o.tarif != null ? o.tarif : t.tarif;
+    let deduit = 0;
+    if (t.inclutPremier && patientId) {
+      const fin = o && o.sauf ? e.lignes.findIndex(l => l.id === o.sauf) : -1;
+      (fin >= 0 ? e.lignes.slice(0, fin) : o && o.date ? e.lignes.filter(l => l.date <= o.date) : e.lignes).forEach(l => {
+        if (l.patientId !== patientId) return;
+        const p = par(e.prestations, l.prestationId);
+        if (p && p.inclutPremier) deduit = 0;
+        else if (p && p.premier) deduit += l.montant;
+      });
+      if (deduit >= tarif) deduit = 0;   // jamais de bilan à zéro
+    }
+    return { montant: tarif - deduit, deduit: deduit, tarif: tarif };
+  }
+  // La première ligne de ce patient à cette date, s'il y en a une : pour signaler une double saisie.
+  const ligneDuJour = (e, patientId, date) => e.lignes.find(l => l.patientId === patientId && l.date === date) || null;
+
+  function ajouterLigne(e, d) {
+    if (!estDate(d.date)) throw new Error('Indiquez la date.');
+    if (d.patientId ? !par(e.patients, d.patientId) : !cleNom(d.patientNom)) throw new Error('Indiquez le patient.');
+    const t = par(e.prestations, d.prestationId);
+    if (!t) throw new Error('Choisissez la prestation.');
+    if (!(Number.isInteger(d.montant) && d.montant > 0)) throw new Error('Le montant doit être supérieur à zéro.');
+    const p = d.patientId ? par(e.patients, d.patientId) : patientPour(e, d.patientNom);   // la fiche n'est créée qu'une fois tout le reste accepté
+    const l = { id: nouvelId(e, 'l'), date: d.date, patientId: p.id, prestationId: t.id, libelle: t.libelle, tarif: t.tarif, montant: d.montant, versements: [], note: propre(d.note), relanceLe: null, facture: d.facture !== false };
+    e.lignes.push(l);
+    e.lignes.sort(ordre);
+    return l;
+  }
+
+  // Facture faite (dans Docorga) ou encore à faire : un simple repère de suivi. Il ne change aucun calcul :
+  // l'Urssaf et l'impôt portent sur tout ce qui est encaissé, avec ou sans facture.
+  function marquerFacture(e, id, faite) {
+    const l = par(e.lignes, id);
+    if (!l) throw new Error('Ligne introuvable.');
+    l.facture = !!faite;
+    return l;
+  }
+  function modifierLigne(e, id, d) {
+    const l = par(e.lignes, id);
+    if (!l) throw new Error('Ligne introuvable.');
+    const cible = 'patientNom' in d ? trouverPatient(e, d.patientNom) : 'patientId' in d ? par(e.patients, d.patientId) : par(e.patients, l.patientId);
+    if ('patientNom' in d && !cleNom(d.patientNom)) throw new Error('Indiquez le patient.');
+    if ('patientId' in d && !cible) throw new Error('Indiquez le patient.');
+    const change = {
+      patient: !cible || cible.id !== l.patientId, prestation: 'prestationId' in d && d.prestationId !== l.prestationId,
+      montant: 'montant' in d && d.montant !== l.montant, date: 'date' in d && d.date !== l.date
+    };
+    const t = par(e.prestations, change.prestation ? d.prestationId : l.prestationId);
+    if (change.prestation && !t) throw new Error('Choisissez la prestation.');
+    if (change.montant) {
+      if (!(Number.isInteger(d.montant) && d.montant > 0)) throw new Error('Le montant doit être supérieur à zéro.');
+      if (d.montant < verse(l)) throw new Error('Le montant ne peut pas être inférieur à ce qui a déjà été versé (' + euros(verse(l)) + ').');
+    }
+    if (change.date && !estDate(d.date)) throw new Error('Indiquez la date.');
+    if (change.patient) l.patientId = (cible || patientPour(e, d.patientNom)).id;
+    if (change.prestation) { l.prestationId = t.id; l.libelle = t.libelle; l.tarif = t.tarif; }
+    if (change.montant) l.montant = d.montant;
+    if (change.date) { l.date = d.date; e.lignes.sort(ordre); }
+    if ('note' in d) l.note = propre(d.note);
+    return l;
+  }
+  // Une ligne saisie par erreur se supprime ; si un paiement y est enregistré, il faut d'abord le retirer.
+  function supprimerLigne(e, id) {
+    const l = par(e.lignes, id);
+    if (!l) throw new Error('Ligne introuvable.');
+    if (l.versements.length) throw new Error('Un paiement est enregistré sur cette ligne : supprimez-le d’abord.');
+    e.lignes = e.lignes.filter(x => x.id !== id);
+  }
+
+  function encaisser(e, id, d) {
+    const l = par(e.lignes, id);
+    if (!l) throw new Error('Ligne introuvable.');
+    if (!(Number.isInteger(d.montant) && d.montant > 0)) throw new Error('Le montant doit être supérieur à zéro.');
+    if (d.montant > reste(l)) throw new Error('Le paiement dépasse ce qu’il reste à payer (' + euros(reste(l)) + ').');
+    if (MODES.indexOf(d.mode) < 0) throw new Error('Choisissez le moyen de paiement.');
+    if (!estDate(d.date)) throw new Error('Indiquez la date du paiement.');
+    const v = { id: nouvelId(e, 'v'), date: d.date, montant: d.montant, mode: d.mode, deposeLe: null };
+    l.versements.push(v);
+    return v;
+  }
+  function supprimerVersement(e, ligneId, versementId) {
+    const l = par(e.lignes, ligneId);
+    if (l) l.versements = l.versements.filter(v => v.id !== versementId);
+  }
+
+  // ---------- relance d'un impayé par mail ----------
+  // Les lignes encore dues par ce patient, la plus ancienne d'abord.
+  const impayeesDe = (e, patientId) => e.lignes.filter(l => l.patientId === patientId && reste(l) > 0);
+  // Le mail de relance tiré du modèle des paramètres, pour les lignes choisies (toutes les impayées par défaut).
+  // On ne nomme pas la prestation : un mail s'affiche parfois sur un écran verrouillé.
+  function mailRelance(e, patientId, ligneIds) {
+    const p = par(e.patients, patientId), m = e.mail || {};
+    const lignes = impayeesDe(e, patientId).filter(l => !ligneIds || ligneIds.indexOf(l.id) >= 0);
+    const total = lignes.reduce((s, l) => s + reste(l), 0), simple = c => euros(c).replace(/[\u00a0\u202f]/g, ' ');
+    const details = lignes.map(l => '- rendez-vous du ' + dateFr(l.date) + ' : ' + simple(reste(l)) + (verse(l) ? ' (reste dû sur ' + simple(l.montant) + ')' : '')).join('\n');
+    const v = { patient: p ? p.nom : '', montant: simple(total), details: details };
+    const remplir = s => String(s).replace(/\{(\w+)\}/g, (tout, k) => Object.prototype.hasOwnProperty.call(v, k) ? v[k] : tout);
+    return { a: p && adresseValide(p.email) ? p.email : '', objet: propre(remplir(propre(m.objet) || RELANCE_OBJET)), texte: remplir(propre(m.texte) ? m.texte : RELANCE_TEXTE).replace(/\r\n?/g, '\n').trim(), lignes: lignes.map(l => l.id), total: total };
+  }
+  // Un mail prérempli : dans la messagerie de l'ordinateur (lien « mailto ») ou dans Gmail.
+  const lienMailto = m => 'mailto:' + (adresseValide(m.a) ? encodeURIComponent(m.a).replace(/%40/g, '@') : '') + '?subject=' + encodeURIComponent(m.objet) + '&body=' + encodeURIComponent(m.texte.replace(/\r\n?|\n/g, '\r\n'));
+  const lienGmail = m => 'https://mail.google.com/mail/?view=cm&fs=1' + (adresseValide(m.a) ? '&to=' + encodeURIComponent(m.a) : '') + '&su=' + encodeURIComponent(m.objet) + '&body=' + encodeURIComponent(m.texte);
+  function noterRelance(e, ligneIds, date) {
+    if (!estDate(date)) throw new Error('Indiquez la date de la relance.');
+    const lot = e.lignes.filter(l => ligneIds.indexOf(l.id) >= 0 && reste(l) > 0);
+    if (!lot.length) throw new Error('Choisissez au moins un rendez-vous à relancer.');
+    lot.forEach(l => { l.relanceLe = date; });
+    return lot.length;
+  }
+
+  // ---------- dépôt en banque (chèques et espèces, en fin de mois) ----------
+  function aDeposer(e) {
+    const t = [];
+    e.lignes.forEach(l => l.versements.forEach(v => { if (v.mode !== 'virement' && !v.deposeLe) t.push({ ligne: l, versement: v, date: v.date, mode: v.mode }); }));
+    return t.sort((a, b) => a.mode === b.mode ? parDate(a, b) : a.mode === 'cheque' ? -1 : 1);   // les chèques d'abord, puis les espèces
+  }
+  function deposer(e, versementIds, date) {
+    if (!estDate(date)) throw new Error('Indiquez la date du dépôt.');
+    const lot = aDeposer(e).filter(x => versementIds.indexOf(x.versement.id) >= 0);
+    if (!lot.length) throw new Error('Cochez au moins un paiement à déposer.');
+    lot.forEach(x => { if (x.versement.date > date) throw new Error('Le dépôt ne peut pas précéder un paiement (reçu le ' + dateFr(x.versement.date) + ').'); });
+    lot.forEach(x => { x.versement.deposeLe = date; });
+    return { n: lot.length, total: lot.reduce((s, x) => s + x.versement.montant, 0) };
+  }
+  function annulerDepot(e, ligneId, versementId) { const l = par(e.lignes, ligneId), v = l ? par(l.versements, versementId) : null; if (v) v.deposeLe = null; }
+  // Les dépôts déjà faits, par date et par nature : c'est ce qui apparaît sur le relevé de la banque.
+  function depots(e) {
+    const g = {};
+    e.lignes.forEach(l => l.versements.forEach(v => {
+      if (!v.deposeLe) return;
+      const x = g[v.deposeLe + ' ' + v.mode] = g[v.deposeLe + ' ' + v.mode] || { date: v.deposeLe, mode: v.mode, n: 0, total: 0 };
+      x.n += 1; x.total += v.montant;
+    }));
+    return Object.keys(g).sort().reverse().map(k => g[k]);
+  }
+  function annulerDepots(e, date, mode) {
+    let n = 0;
+    e.lignes.forEach(l => l.versements.forEach(v => { if (v.deposeLe === date && v.mode === mode) { v.deposeLe = null; n += 1; } }));
+    return n;
+  }
+  // Le rappel de dépôt : les trois derniers jours du mois s'il reste des chèques ou des espèces au cabinet,
+  // et tous les jours tant qu'un chèque ou des espèces d'un mois passé ne sont pas déposés. null sinon.
+  function rappelDepot(e, jour) {
+    const t = aDeposer(e);
+    if (!t.length) return null;
+    const fin = finDeMois(jour.slice(0, 7)), jours = ecartJours(jour, fin), retard = t.filter(x => x.date < jour.slice(0, 7) + '-01');
+    if (jours >= JOURS_RAPPEL && !retard.length) return null;
+    const de = mode => { const x = t.filter(y => y.mode === mode); return { n: x.length, total: x.reduce((s, y) => s + y.versement.montant, 0) }; };
+    return { raison: retard.length ? 'retard' : 'fin', fin: fin, jours: jours, n: t.length, total: t.reduce((s, x) => s + x.versement.montant, 0), cheques: de('cheque'), especes: de('especes'), plusAncien: t.reduce((m, x) => x.date < m ? x.date : m, t[0].date) };
+  }
+  // La couleur du bouton « Déposer en banque », selon ce qui attend au cabinet (règle de Hugo du 2026-11-14) :
+  // vert jusqu'à 400 €, jaune jusqu'à 800 €, rouge au-delà ; rien s'il n'y a rien à déposer.
+  const SEUILS_DEPOT = [40000, 80000];
+  const niveauDepot = total => !(total > 0) ? '' : total <= SEUILS_DEPOT[0] ? 'vert' : total <= SEUILS_DEPOT[1] ? 'jaune' : 'rouge';
+  // Le même rappel dans le calendrier de l'ordinateur (fichier .ics) : le dernier jour de chaque mois à 17 h,
+  // avec une alerte deux jours avant et une le matin même, à 9 h. Aucune donnée de patient.
+  function rappelCalendrier(jour, maintenant) {
+    const z = n => pad(n), d = maintenant || new Date();
+    const stamp = d.getUTCFullYear() + z(d.getUTCMonth() + 1) + z(d.getUTCDate()) + 'T' + z(d.getUTCHours()) + z(d.getUTCMinutes()) + z(d.getUTCSeconds()) + 'Z';
+    const alerte = (quand, texte) => ['BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + texte, 'TRIGGER:' + quand, 'END:VALARM'];
+    return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//HadiPsy//Suivi des paiements//FR', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      'BEGIN:VEVENT', 'UID:depot-fin-de-mois@suivi-des-paiements', 'DTSTAMP:' + stamp,
+      'DTSTART:' + finDeMois(jour.slice(0, 7)).replace(/-/g, '') + 'T170000', 'DURATION:PT30M', 'RRULE:FREQ=MONTHLY;BYMONTHDAY=-1',
+      'SUMMARY:Déposer les chèques et les espèces à la banque',
+      'DESCRIPTION:Ouvrir le suivi des paiements\\, onglet Encaissements\\, bouton « Déposer en banque » : la liste et le total y sont.',
+      'TRANSP:TRANSPARENT']
+      .concat(alerte('-P2DT8H', 'Dans deux jours : dépôt des chèques et des espèces'), alerte('-PT8H', 'Aujourd’hui : dépôt des chèques et des espèces'), ['END:VEVENT', 'END:VCALENDAR'])
+      .map(plier).join('\r\n') + '\r\n';
+  }
+  // Une ligne d'un fichier .ics ne dépasse pas 75 octets : au-delà, elle continue sur la suivante, précédée d'une espace.
+  function plier(ligne) {
+    const t = [];
+    let cur = '', n = 0;
+    for (const c of ligne) {
+      const o = unescape(encodeURIComponent(c)).length;
+      if (n + o > (t.length ? 74 : 75)) { t.push(cur); cur = ''; n = 0; }
+      cur += c; n += o;
+    }
+    t.push(cur);
+    return t.join('\r\n ');
+  }
+
+  // ---------- seuils ----------
+  // Chaque euro encaissé laisse (1 - Urssaf - impôt) : le point mort couvre les charges fixes,
+  // le seuil de confort couvre en plus le revenu net souhaité. Arrondis à l'euro supérieur.
+  const totalFixes = e => e.params.fixes.reduce((s, f) => s + f.montant, 0);
+  function seuils(e) {
+    const p = e.params, fixes = totalFixes(e), garde = 1 - (p.urssaf + (p.impot || 0)) / 100;
+    const besoin = c => garde > 0 ? Math.ceil(c / garde / 100 - 1e-9) * 100 : null;   // la marge évite qu'un compte rond monte d'un euro
+    const s = { fixes: fixes, garde: garde, pointMort: besoin(fixes), confort: p.revenuVise != null ? besoin(fixes + p.revenuVise) : null };
+    // Les congés : les charges courent douze mois sur douze, mais rien n'est encaissé ces jours-là. L'objectif de l'année
+    // (le seuil visé x 12) se répartit sur les jours de consultation qui restent ; le manque à gagner est ce que
+    // rapporteraient les jours de congés à ce rythme.
+    const cible = s.confort != null ? s.confort : s.pointMort, js = p.joursSemaine || 5, conges = p.conges || 0;
+    const jours = Math.round(SEMAINES_AN * js * 100) / 100, travailles = Math.round((jours - conges) * 100) / 100, euro = c => Math.ceil(c / 100 - 1e-9) * 100;
+    s.conges = cible == null || travailles <= 0 ? null : {
+      jours: conges, joursSemaine: js, joursAn: jours, travailles: travailles, annuel: cible * 12, vise: s.confort != null ? 'confort' : 'pointMort',
+      parJour: euro(cible * 12 / travailles), parJourSansConges: euro(cible * 12 / jours), manque: conges * euro(cible * 12 / travailles)
+    };
+    return s;
+  }
+  // Le rythme réel, d'après le livre : les rendez-vous des 365 derniers jours (aujourd'hui compris), par jour de consultation.
+  function rythme(e, jour) {
+    const debut = ajouterJours(jour, -364), dates = {};
+    let total = 0;
+    e.lignes.forEach(l => { if (l.date >= debut && l.date <= jour) { dates[l.date] = true; total += l.montant; } });
+    const n = Object.keys(dates).length;
+    return { debut: debut, jours: n, total: total, moyenne: n ? Math.round(total / n / 100) * 100 : null };
+  }
+  function repartition(e, encaisse, nbMois) {
+    const p = e.params, fixes = totalFixes(e) * (nbMois == null ? 1 : nbMois);
+    const urssaf = Math.round(encaisse * p.urssaf / 100), impot = Math.round(encaisse * (p.impot || 0) / 100);
+    return { fixes: fixes, urssaf: urssaf, impot: impot, net: encaisse - fixes - urssaf - impot };
+  }
+  const tauxImpotEstime = tmi => Math.round(tmi * (100 - ABATTEMENT_BNC)) / 100;                      // tranche du foyer x 66 %
+  const tauxDepuisRegularisation = (regul, recettes) => recettes > 0 ? Math.round(regul / recettes * 1000) / 10 : null;   // en %, au dixième
+
+  // ---------- synthèse ----------
+  // Ce qui compte comme encaissé : chaque paiement, à sa date (et non la date du rendez-vous).
+  function synthese(e, mois) {
+    const douze = [], index = {}, an = mois.slice(0, 4);
+    for (let i = 11; i >= 0; i--) { index[ajouterMois(mois, -i)] = douze.length; douze.push({ mois: ajouterMois(mois, -i), encaisse: 0 }); }
+    const s = {
+      mois: mois, encaisse: 0, rendezVous: 0, nbLignes: 0, parMode: { especes: 0, cheque: 0, virement: 0 }, parPrestation: {},
+      impayes: { n: 0, total: 0, plusAncienne: null }, depot: { n: 0, total: 0 }, douze: douze
+    };
+    let premier = null, annee = 0;
+    e.lignes.forEach(l => {
+      if (!premier || l.date < premier) premier = l.date;
+      if (l.date.slice(0, 7) === mois) { s.rendezVous += l.montant; s.nbLignes += 1; }
+      const r = reste(l);
+      if (r > 0) { s.impayes.n += 1; s.impayes.total += r; if (!s.impayes.plusAncienne || l.date < s.impayes.plusAncienne) s.impayes.plusAncienne = l.date; }
+      l.versements.forEach(v => {
+        const m = v.date.slice(0, 7);
+        if (v.date < premier) premier = v.date;
+        if (m in index) douze[index[m]].encaisse += v.montant;
+        if (m.slice(0, 4) === an && m <= mois) annee += v.montant;
+        if (m === mois) { s.encaisse += v.montant; s.parMode[v.mode] += v.montant; s.parPrestation[l.libelle] = (s.parPrestation[l.libelle] || 0) + v.montant; }
+        if (v.mode !== 'virement' && !v.deposeLe) { s.depot.n += 1; s.depot.total += v.montant; }
+      });
+    });
+    s.seuils = seuils(e);
+    s.repartition = repartition(e, s.encaisse);
+    // Cumul de l'année : de janvier (ou du premier mois du livre, s'il commence en cours d'année) au mois affiché.
+    s.debutLivre = premier ? premier.slice(0, 7) : null;
+    const debut = premier && premier.slice(0, 4) === an && premier.slice(0, 7) <= mois ? premier.slice(0, 7) : an + '-01';
+    const nbMois = +mois.slice(5, 7) - +debut.slice(5, 7) + 1;
+    s.annee = Object.assign({ debut: debut, nbMois: nbMois, encaisse: annee, moyenne: Math.round(annee / nbMois / 100) * 100 }, repartition(e, annee, nbMois));
+    return s;
+  }
+
+  // ---------- export CSV (point-virgule, pour le tableur) ----------
+  // Un texte qui commence par = + - ou @ serait lu comme une formule par le tableur : une espace devant l'en empêche.
+  const csv = lignes => '﻿' + lignes.map(l => l.map(v => { v = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(v)) v = ' ' + v; return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(';')).join('\r\n') + '\r\n';
+  const dansPeriode = (d, debut, fin) => (!debut || d >= debut) && (!fin || d <= fin);
+  // Les encaissements : une ligne par paiement reçu, dans l'ordre des dates de paiement.
+  function exportEncaissements(e, debut, fin) {
+    const t = [];
+    e.lignes.forEach((l, i) => l.versements.forEach(v => { if (dansPeriode(v.date, debut, fin)) t.push({ date: v.date, i: i, ligne: l, v: v }); }));
+    t.sort((a, b) => parDate(a, b) || a.i - b.i);
+    return csv([['Date du paiement', 'Patient', 'Prestation', 'Date du rendez-vous', 'Montant', 'Moyen de paiement', 'Déposé en banque le', 'Facture faite', 'Note']].concat(
+      t.map(x => [dateFr(x.date), nomPatient(par(e.patients, x.ligne.patientId)), x.ligne.libelle, dateFr(x.ligne.date), csvMontant(x.v.montant), NOM_MODE[x.v.mode], dateFr(x.v.deposeLe), x.ligne.facture === false ? 'Non' : 'Oui', x.ligne.note])));
+  }
+  // Les années présentes dans le livre (rendez-vous ou paiements), la plus récente d'abord : pour choisir celle à exporter.
+  function annees(e) {
+    const a = {};
+    e.lignes.forEach(l => { a[l.date.slice(0, 4)] = true; l.versements.forEach(v => { a[v.date.slice(0, 4)] = true; }); });
+    return Object.keys(a).sort().reverse();
+  }
+
+  // ---------- données fictives ----------
+  // Datées par rapport à aujourd'hui. Patients inventés (noms d'arbres) ; les tarifs et les charges sont ceux du cabinet.
+  const REVENU_EXEMPLE = 200000;
+  const CONGES_EXEMPLE = 25;
+  function donneesDemo(auj) {
+    const e = reglagesCabinet(etatVide());
+    e.params.revenuVise = REVENU_EXEMPLE;   // exemple, à remplacer par le montant de Hala
+    e.params.conges = CONGES_EXEMPLE;        // idem
+    ['Élise Tilleul', 'Marc Noisetier', 'Paul Sorbier', 'Inès Mélèze', 'Tom Charme', 'Nora Cytise', 'Adam Alisier', 'Lina Merisier', 'Léa Églantier', 'Noé Cormier', 'Jeanne Aubépine', 'Rose Amandier']
+      .forEach(nom => { patientPour(e, nom).email = sansAccent(nom).replace(/ /g, '.') + '@' + 'exemple.fr'; });
+    const P = i => e.patients[i].id;
+    const debut = lundiDe(ajouterJours(auj, -43 * 7));
+    // suivi hebdomadaire : [patient, jour de la semaine, moyen de paiement, première semaine]
+    const plan = [[0, 0, 'cheque', 0], [1, 0, 'virement', 0], [2, 1, 'especes', 0], [3, 1, 'virement', 4], [4, 2, 'cheque', 9], [5, 2, 'especes', 14], [6, 3, 'virement', 18], [7, 3, 'cheque', 26], [8, 4, 'especes', 33], [9, 4, 'virement', 38]];
+    const evts = [];
+    for (let s = 0; s <= 43; s++) {
+      if (s >= 22 && s <= 24) continue;   // trois semaines de congés
+      plan.forEach(pl => { if (s >= pl[3]) evts.push({ date: ajouterJours(debut, s * 7 + pl[1]), pid: P(pl[0]), prest: s === pl[3] ? 'premier-psy' : 'suivi', mode: pl[2], sem: s, plan: pl[0] }); });
+    }
+    evts.push({ date: ajouterJours(debut, 30 * 7 + 4), pid: P(10), prest: 'premier-bilan', mode: 'especes' });
+    evts.push({ date: ajouterJours(debut, 33 * 7 + 4), pid: P(10), prest: 'bilan-tsa', bilan: [[300, 'cheque', 0], [300, 'cheque', 21]] });
+    evts.push({ date: ajouterJours(debut, 39 * 7 + 3), pid: P(11), prest: 'premier-bilan', mode: 'cheque' });
+    evts.push({ date: ajouterJours(debut, 41 * 7 + 3), pid: P(11), prest: 'bilan-tdah', bilan: [[150, 'virement', 2]] });
+    evts.filter(x => x.date <= auj).sort(parDate).forEach(x => {
+      const l = ajouterLigne(e, { date: x.date, patientId: x.pid, prestationId: x.prest, montant: montantPropose(e, x.pid, x.prest, { date: x.date }).montant });
+      const payer = (montant, mode, date) => { if (date <= auj) encaisser(e, l.id, { date: date, montant: montant, mode: mode }); };
+      if (x.bilan) x.bilan.forEach(b => payer(b[0] * 100, b[1], ajouterJours(x.date, b[2])));
+      else if (x.mode !== 'virement') payer(l.montant, x.mode, x.date);
+      else if (!(x.plan === 1 && x.sem >= 42) && !(x.plan === 3 && x.sem === 40)) payer(l.montant, 'virement', ajouterJours(x.date, 2));   // quelques virements se font attendre
+    });
+    const ceMois = auj.slice(0, 7);
+    e.lignes.forEach(l => l.versements.forEach(v => { if (v.mode !== 'virement' && v.date.slice(0, 7) < ceMois) v.deposeLe = finDeMois(v.date.slice(0, 7)); }));   // déposés en fin de mois
+    e.demo = { genereLe: auj, modifie: false };
+    return e;
+  }
+
+  const api = {
+    MODES: MODES, NOM_MODE: NOM_MODE, NOM_STATUT: NOM_STATUT, RELANCE_OBJET: RELANCE_OBJET, RELANCE_TEXTE: RELANCE_TEXTE, MESSAGERIES: MESSAGERIES, ABATTEMENT_BNC: ABATTEMENT_BNC, JOURS_RAPPEL: JOURS_RAPPEL, REVENU_EXEMPLE: REVENU_EXEMPLE, MOIS: MOIS, MOIS_COURT: MOIS_COURT,
+    pad: pad, iso: iso, deIso: deIso, ajouterJours: ajouterJours, lundiDe: lundiDe, ajouterMois: ajouterMois, finDeMois: finDeMois, ecartJours: ecartJours, estDate: estDate, dateFr: dateFr, nomMois: nomMois,
+    versCentimes: versCentimes, versTaux: versTaux, versJours: versJours, nombre: nombre, euros: euros, eurosFixe: eurosFixe, saisie: saisie, sansAccent: sansAccent, propre: propre, cleNom: cleNom,
+    etatVide: etatVide, reglagesCabinet: reglagesCabinet, migrer: migrer, estEtat: estEtat, normaliser: normaliser, relire: relire, par: par, parDate: parDate, nomPatient: nomPatient, libellePrestation: libellePrestation,
+    trouverPatient: trouverPatient, patientPour: patientPour, ajouterPatient: ajouterPatient, adresseValide: adresseValide, changerEmail: changerEmail,
+    impayeesDe: impayeesDe, mailRelance: mailRelance, lienMailto: lienMailto, lienGmail: lienGmail, noterRelance: noterRelance, lignesDe: lignesDe, renommerPatient: renommerPatient, fusionnerPatients: fusionnerPatients, supprimerPatient: supprimerPatient,
+    verse: verse, reste: reste, statut: statut, dernierVersement: dernierVersement, modesDe: modesDe, montantPropose: montantPropose, ligneDuJour: ligneDuJour, annees: annees,
+    ajouterLigne: ajouterLigne, modifierLigne: modifierLigne, marquerFacture: marquerFacture, supprimerLigne: supprimerLigne, encaisser: encaisser, supprimerVersement: supprimerVersement,
+    aDeposer: aDeposer, deposer: deposer, annulerDepot: annulerDepot, depots: depots, annulerDepots: annulerDepots, rappelDepot: rappelDepot, rappelCalendrier: rappelCalendrier, niveauDepot: niveauDepot, SEUILS_DEPOT: SEUILS_DEPOT,
+    totalFixes: totalFixes, seuils: seuils, repartition: repartition, tauxImpotEstime: tauxImpotEstime, tauxDepuisRegularisation: tauxDepuisRegularisation,
+    synthese: synthese, exportEncaissements: exportEncaissements, donneesDemo: donneesDemo, rythme: rythme, SEMAINES_AN: SEMAINES_AN, JOURS_CONGES_MAX: JOURS_CONGES_MAX, CONGES_EXEMPLE: CONGES_EXEMPLE,
+    CHIFFRE_FORMAT: CHIFFRE_FORMAT, CHIFFRE_TOURS: CHIFFRE_TOURS, MDP_MIN: MDP_MIN, mdpValide: mdpValide, nouvelleCle: nouvelleCle, chiffrer: chiffrer, dechiffrer: dechiffrer, dechiffrerAvec: dechiffrerAvec, estEnveloppe: estEnveloppe,
+    NOTE_TYPES: NOTE_TYPES, NOTE_MAX: NOTE_MAX, notesVides: notesVides, relireNotes: relireNotes, ajouterNote: ajouterNote, modifierNote: modifierNote, basculerNote: basculerNote, supprimerNote: supprimerNote, notesOuvertes: notesOuvertes, donneesDansNote: donneesDansNote, texteNotes: texteNotes
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else racine.SuiviNoyau = api;
+})(typeof window !== 'undefined' ? window : this);
+</script>
+<script>
+/* Suivi des paiements : interface, en trois écrans (Encaissements, Synthèse, Paramètres).
+   Les factures se font dans Docorga : l'outil suit les paiements, les dépôts en banque et les seuils.
+   Tout calcul passe par le noyau (window.SuiviNoyau).
+   Deux règles de mise à jour de la page :
+   - un champ modifié ne provoque jamais le réaffichage de l'écran entier, seulement de la zone qui en dépend
+     (sinon le bouton sur lequel on clique juste après est remplacé sous la souris et le clic se perd) ;
+   - le formulaire d'ajout garde ce qui y est déjà saisi quand l'écran se réaffiche.
+   Prototype : l'état est gardé dans la mémoire du navigateur. La version suivante l'écrira dans un fichier chiffré. */
+(function () {
+  'use strict';
+  const N = window.SuiviNoyau, E = N.euros;
+  // PROD : la version en ligne (livre chiffré par mot de passe, sans patients fictifs). Sinon : le prototype.
+  const PROD = !!window.SUIVI_PROD;
+  const CLE = PROD ? 'hadipsy-suivi-paiements' : 'hadipsy-suivi-paiements-prototype-2', CLE_ECART = CLE + '-ecarte', CLE_RAPPEL = CLE + '-rappel-plus-tard', CLE_NOTES = CLE + '-notes', CLE_SAUVE = CLE + '-sauvegarde-le';
+  const VERROU_ARRIERE_PLAN = 10 * 60000, VERROU_INACTIVITE = 15 * 60000, JOURS_SANS_SAUVEGARDE = 7;
+  const ENCADRE = (() => { try { return window.self !== window.top; } catch (x) { return true; } })();
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const page = $('#page'), dlg = $('#dlg'), bulle = $('#bulle');
+  const VUES = {}, ACTIONS = {}, CHANGES = {}, SAISIES = {}, FORMS = {};
+  const ONGLETS = [['encaissements', 'Encaissements'], ['synthese', 'Synthèse'], ['parametres', 'Paramètres']];
+  const TRANCHES = [0, 11, 30, 41, 45];
+  let cle = null, verrouille = PROD, ecritures = Promise.resolve(), derniereActivite = Date.now(), cacheLe = 0, carnet = N.notesVides(), etat = null, vue = { nom: 'encaissements', id: null }, suite = null, minuterie = 0, memoire = true, prevenu = false, redessin = 0, ecarte = false, fondAppuye = false;
+  const F = { jour: '', mois: '', filtre: 'mois', texte: '', synMois: '', saisieDate: '', ajPropose: '', dernierAjout: 0, ecran: '', ouverts: {}, rel: { pid: '', objet: '', texte: '' }, noteType: 'idee', noteEcran: 'Général', tri: null, filtres: {}, menuCol: '' };
+  const NOM_MESSAGERIE = { appli: 'Mail ou Outlook, sur l’ordinateur', gmail: 'Gmail, dans le navigateur' };
+
+  // ---------- petits outils ----------
+  const h = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const auj = () => N.iso(new Date());
+  const patient = id => N.par(etat.patients, id);
+  const pill = (cl, txt) => '<span class="pill ' + cl + '">' + h(txt) + '</span>';
+  const bt = (txt, action, attrs, cl) => '<button type="button" class="btn sm ' + (cl || '') + '" data-a="' + action + '" ' + (attrs || '') + '>' + h(txt) + '</button>';
+  const lien = (cible, txt) => '<a href="#' + cible + '" data-a="aller" data-vue="' + cible + '">' + h(txt) + '</a>';
+  const TIRET = '<span class="vide">—</span>';
+  const pluriel = (n, un, plusieurs) => n + ' ' + (n > 1 ? plusieurs : un);
+  const jourMois = s => N.dateFr(s).slice(0, 5);
+  const multiligne = s => h(s).replace(/\n/g, '<br>');
+  const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
+  const virgule = n => String(n).replace('.', ',');
+  const taux = t => virgule(t) + '\u00a0%';
+  const somme = (liste, k) => liste.reduce((s, x) => s + k(x), 0);
+  const optionsPrestations = sel => etat.prestations.map(t => '<option value="' + t.id + '"' + (t.id === sel ? ' selected' : '') + '>' + h(t.libelle) + '</option>').join('');
+  const listePatients = () => '<datalist id="liste-patients">' + etat.patients.map(p => p.nom).sort((a, b) => a.localeCompare(b, 'fr')).map(n => '<option value="' + h(n) + '">').join('') + '</datalist>';
+  const PILL_STATUT = { payee: 'ok', partielle: 'warn', impayee: 'bad' };
+  const pillStatut = l => pill(PILL_STATUT[N.statut(l)], N.NOM_STATUT[N.statut(l)]);
+  const ouvert = id => F.ouverts[id] ? ' open' : '';
+
+  // ---------- mémoire ----------
+  function lireEtat(texte) {
+    try { return N.relire(JSON.parse(texte)); } catch (x) { return null; }   // un livre de l'ancienne version est converti
+  }
+  // Des données enregistrées que cette version ne sait pas relire ne sont jamais écrasées en silence : elles sont mises de côté.
+  function charger() {
+    let t = null;
+    try { t = localStorage.getItem(CLE); } catch (x) { return null; }
+    if (!t) return null;
+    const o = lireEtat(t);
+    if (!o) { try { localStorage.setItem(CLE_ECART, t); ecarte = true; } catch (x) { /* mémoire indisponible */ } }
+    return o;
+  }
+  const donneesEcartees = () => { try { return localStorage.getItem(CLE_ECART); } catch (x) { return null; } };
+  function sauver() {
+    if (PROD) { persister(); return; }
+    try { localStorage.setItem(CLE, JSON.stringify(etat)); memoire = true; } catch (x) { memoire = false; }
+    majBadge();
+    if (!memoire && !prevenu) { prevenu = true; toast('Ce navigateur ne garde pas les données : exportez une sauvegarde (Paramètres) avant de fermer la page.', 'bad'); }
+  }
+  function noter() { if (etat.demo) etat.demo.modifie = true; sauver(); }
+  // Version en ligne : chaque enregistrement chiffre le livre entier avec la clé de la séance, dans l'ordre des modifications.
+  function persister() {
+    const texte = JSON.stringify(etat), c = cle;
+    if (!c) return;
+    ecritures = ecritures.then(() => N.chiffrer(c, texte)).then(env => { localStorage.setItem(CLE, JSON.stringify(env)); memoire = true; })
+      .catch(() => { memoire = false; if (!prevenu) { prevenu = true; toast('Le livre n’a pas pu être enregistré sur cet appareil : faites tout de suite une sauvegarde (Paramètres).', 'bad'); } })
+      .then(majBadge);
+  }
+  const enveloppeGardee = () => { try { const t = localStorage.getItem(CLE); const o = t && JSON.parse(t); return N.estEnveloppe(o) ? o : null; } catch (x) { return null; } };
+  const derniereSauvegarde = () => { try { return localStorage.getItem(CLE_SAUVE); } catch (x) { return null; } };
+  // Les notes d'amélioration ont leur propre place en mémoire : vider, restaurer ou recharger le livre ne les touche pas.
+  function chargerNotes() {
+    try { const t = localStorage.getItem(CLE_NOTES); carnet = t ? N.relireNotes(JSON.parse(t)) : N.notesVides(); } catch (x) { carnet = N.notesVides(); }
+  }
+  function sauverNotes() {
+    try { localStorage.setItem(CLE_NOTES, JSON.stringify(carnet)); } catch (x) { toast('Ce navigateur ne garde pas les notes : enregistrez le fichier des notes avant de fermer la page.', 'bad'); }
+    majNotes();
+  }
+  function majNotes() {
+    const n = N.notesOuvertes(carnet).length, b = $('#notes-compte'), bt = $('#btn-notes');
+    b.textContent = n; b.hidden = !n;
+    bt.classList.toggle('on', vue.nom === 'notes');
+    bt.title = n ? pluriel(n, 'note à traiter', 'notes à traiter') : 'Mes notes : une idée, un bug, une question sur l’outil';
+  }
+  // Toute modification passe par ici, en tout ou rien : si le noyau refuse, l'état d'avant est remis et l'erreur
+  // s'affiche près du formulaire ; sinon l'état est enregistré.
+  function muter(fn, zone) {
+    const avant = JSON.stringify(etat);
+    let r;
+    try { r = fn(); } catch (x) { etat = JSON.parse(avant); erreur(x && x.message ? x.message : String(x), zone); return undefined; }
+    noter();
+    return r === undefined ? true : r;
+  }
+  function majBadge() {
+    const b = $('#badge');
+    if (PROD) { b.textContent = 'Non enregistré'; b.hidden = memoire || verrouille; return; }
+    b.textContent = (etat && etat.demo ? 'Prototype · patients fictifs' : 'Prototype') + (memoire ? '' : ' · non enregistré');
+  }
+
+  // ---------- messages et fenêtres ----------
+  function toast(msg, cl) {
+    const t = $('#toast');
+    t.textContent = msg; t.className = 'on ' + (cl || '');
+    clearTimeout(minuterie); minuterie = setTimeout(() => { t.className = ''; }, cl === 'bad' ? 9000 : 6000);
+  }
+  function erreur(msg, zone) {
+    const z = dlg.open ? $('#dlg-erreur', dlg) : zone ? $(zone) : null;
+    if (z) z.textContent = msg; else if (msg) toast(msg, 'bad');
+  }
+  function ouvrir(html, large) {
+    suite = null;
+    dlg.className = large ? 'large' : '';
+    dlg.innerHTML = html;
+    if (!dlg.open) dlg.showModal();
+    dlg.scrollTop = 0;
+    const f = $('[autofocus]', dlg);
+    if (f) f.focus();
+  }
+  function fermer() { suite = null; if (dlg.open) dlg.close(); dlg.innerHTML = ''; }
+  // o.retour : ce qu'on rouvre si la personne renonce ; o.apres : ce qu'on fait une fois l'action confirmée ; o.non : le libellé pour renoncer.
+  // Quand l'action ne se rattrape pas (o.danger, o.prudent), la touche Entrée tombe sur le bouton qui renonce.
+  function confirmer(titre, texte, libelle, fn, o) {
+    o = o || {};
+    const prudent = o.danger || o.prudent;
+    ouvrir(`<h3>${h(titre)}</h3><p>${h(texte)}</p><p class="erreur" id="dlg-erreur" role="alert"></p>
+      <div class="row fin"><button type="button" class="btn" data-a="non"${prudent ? ' autofocus' : ''}>${h(o.non || 'Annuler')}</button><button type="button" class="btn ${o.danger ? 'danger' : 'pri'}" data-a="oui"${prudent ? '' : ' autofocus'}>${h(libelle)}</button></div>`);
+    suite = { fn: fn, retour: o.retour || null, apres: o.apres || null };
+  }
+  async function telecharger(nom, texte, mime) {
+    const dire = msg => (dlg.open ? erreur : toast)(msg);
+    // Sur un téléphone, la feuille de partage permet « Enregistrer dans Fichiers » (un .ics s'ouvre directement dans le calendrier).
+    if (PROD && !/\.ics$/.test(nom) && window.matchMedia && matchMedia('(pointer: coarse)').matches && navigator.canShare) {
+      try {
+        const f = new File([texte], nom, { type: mime });
+        if (navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: nom }); return true; }
+      } catch (x) { if (x && x.name === 'AbortError') return false; }
+    }
+    if (window.claude && typeof window.claude.use === 'function') {   // aperçu en ligne : l'enregistrement passe par la plateforme
+      try { const d = await window.claude.use('downloads'); if (d) { await d.save({ filename: nom, data: texte }); return true; } }
+      catch (x) {
+        if (x && x.code === 'declined') return false;
+        if (x && x.code === 'rejected_extension') { dire('L’aperçu en ligne n’enregistre pas ce type de fichier (' + nom.split('.').pop() + '). Il s’enregistre depuis le fichier de l’outil ouvert sur l’ordinateur.'); return false; }
+      }
+    }
+    try {
+      const url = URL.createObjectURL(new Blob([texte], { type: mime })), a = document.createElement('a');
+      a.href = url; a.download = nom;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      if (ENCADRE) dire('Si rien ne se télécharge dans cet aperçu, ouvrez le fichier de l’outil sur l’ordinateur.');
+      return true;
+    } catch (x) { erreur('Le fichier n’a pas pu être enregistré.'); return false; }
+  }
+
+  // ---------- navigation ----------
+  function lire(nom) {
+    return { nom: nom === 'notes' || ONGLETS.some(o => o[0] === nom) ? nom : 'encaissements', id: null };
+  }
+  function aller(nom) {
+    vue = lire(nom);
+    try { if (location.hash !== '#' + nom) location.hash = nom; } catch (x) { /* adresse non modifiable : la vue change quand même */ }
+    rendre();
+    window.scrollTo(0, 0);
+  }
+  // L'outil est resté ouvert pendant la nuit : la date proposée et le mois affiché repassent à aujourd'hui.
+  function jourChange() {
+    const j = auj(), ancien = F.jour.slice(0, 7);
+    if (j === F.jour) return false;
+    if (F.mois === ancien) F.mois = j.slice(0, 7);
+    if (F.synMois === ancien) F.synMois = j.slice(0, 7);
+    F.saisieDate = ''; F.jour = j;
+    return true;
+  }
+  // o.vierge : le formulaire d'ajout repart de zéro (après un ajout réussi) ; sinon ce qui y est saisi est conservé.
+  function rendre(o) {
+    if (verrouille) return rendreVerrou();
+    const garde = {}, lendemain = jourChange();
+    if (!(o && o.vierge)) $$('[data-garde]', page).forEach(el => { garde[el.id] = el.value; });
+    if (lendemain) delete garde['aj-date'];
+    if (F.ecran !== vue.nom) { F.ecran = vue.nom; F.saisieDate = ''; }   // la date d'une saisie en série ne survit pas à un changement d'écran
+    $('#onglets').innerHTML = ONGLETS.map(x => `<button type="button" data-a="aller" data-vue="${x[0]}"${x[0] === vue.nom ? ' class="on" aria-current="page"' : ''}>${x[1]}</button>`).join('');
+    majBadge(); majNotes(); $('#btn-notes').hidden = false; $('#btn-verrou').hidden = !PROD;
+    if (F.menuCol) fermerMenuCol();
+    bulle.hidden = true;
+    page.className = 'vue-' + vue.nom;   // l'écran des encaissements prend plus de largeur pour son tableau
+    page.innerHTML = (VUES[vue.nom] || VUES.encaissements)();
+    Object.keys(garde).forEach(id => { const el = document.getElementById(id); if (el) el.value = garde[id]; });
+    if ($('#aj-info')) ajInfo('doux');
+    if ($('#graph')) dessiner();
+  }
+  function navMois(mois, action) {
+    const dernier = mois >= auj().slice(0, 7);
+    return `<div class="mois-nav"><button type="button" class="btn sm" data-a="${action}" data-d="-1" aria-label="Mois précédent">‹</button><b>${h(N.nomMois(mois))}</b><button type="button" class="btn sm" data-a="${action}" data-d="1" aria-label="Mois suivant"${dernier ? ' disabled' : ''}>›</button></div>`;
+  }
+  const avis = () => PROD ? htmlRappelSauvegarde() : `<p class="avis">${etat.demo ? 'Prototype : les patients et les lignes sont inventés, les tarifs et les charges sont ceux du cabinet. ' : 'Prototype. '}Ne saisissez pas de vrais noms, rien n’est encore chiffré ni sauvegardé.</p>`;
+
+  // --- rappel de dépôt : les derniers jours du mois, ou tant qu'un mois passé n'est pas déposé. « Plus tard » le cache jusqu'au lendemain.
+  const plusTard = () => { try { return localStorage.getItem(CLE_RAPPEL); } catch (x) { return null; } };
+  function htmlRappel() {
+    const r = N.rappelDepot(etat, auj());
+    if (!r || plusTard() === auj()) return '';
+    const quoi = [r.cheques.n ? pluriel(r.cheques.n, 'chèque', 'chèques') + ' (' + E(r.cheques.total) + ')' : '', r.especes.n ? 'des espèces (' + E(r.especes.total) + ')' : ''].filter(Boolean).join(' et ');
+    const texte = r.raison === 'retard' ? 'Dépôt en retard : ' + quoi + ' attendent encore d’être déposés, dont des paiements du mois dernier.'
+      : (r.jours === 0 ? 'Dernier jour du mois' : 'Fin du mois dans ' + pluriel(r.jours, 'jour', 'jours')) + ' : pensez à déposer ' + quoi + ' à la banque.';
+    return `<div class="rappel ${N.niveauDepot(r.total)}" role="status"><span class="txt"><b>${h(texte)}</b> Total : ${E(r.total)}.</span>
+      <span class="row">${bt('Déposer en banque', 'depots', '', 'pri')}${bt('Plus tard', 'rappelPlusTard', '', 'link')}</span></div>`;
+  }
+  ACTIONS.rappelPlusTard = () => { try { localStorage.setItem(CLE_RAPPEL, auj()); } catch (x) { /* mémoire indisponible : le rappel reviendra */ } rendre(); };
+  // Le bouton « Déposer en banque » : vert jusqu'à 400 €, jaune jusqu'à 800 €, rouge au-delà.
+  function boutonDepot() {
+    const t = somme(N.aDeposer(etat), x => x.versement.montant), niv = N.niveauDepot(t);
+    return `<button type="button" class="btn depot ${niv}" data-a="depots" title="${t ? 'Chèques et espèces au cabinet : vert jusqu’à 400 €, jaune jusqu’à 800 €, rouge au-delà' : 'Historique des dépôts'}">${t ? 'Déposer en banque · ' + E(t) : 'Dépôts en banque'}</button>`;
+  }
+
+  // ====================================================================== 1. ENCAISSEMENTS
+  function celluleDepot(l) {
+    const t = l.versements.filter(v => v.mode !== 'virement');
+    if (!t.length) return TIRET;
+    if (t.some(v => !v.deposeLe)) return pill('warn', 'À déposer');
+    return '<span class="vide">Déposé le ' + h(jourMois(t.map(v => v.deposeLe).sort().pop())) + '</span>';
+  }
+  function ligneLivre(l) {
+    const d = N.dernierVersement(l), r = N.reste(l);
+    return `<tr class="${r > 0 ? 'du' : ''}">
+      <td class="nowrap c-date">${h(jourMois(l.date))}</td>
+      <td class="centre c-fact"><label class="lab-fact"><input type="checkbox" class="coche-facture" data-c="facture" data-id="${l.id}"${l.facture === false ? '' : ' checked'} aria-label="Facture faite pour le rendez-vous du ${h(jourMois(l.date))}" title="${l.facture === false ? 'Facture à faire dans Docorga' : 'Facture faite'}"><span class="mobile-seul">Facture faite</span></label></td>
+      <td class="nom c-nom">${h(N.nomPatient(patient(l.patientId)))}</td><td class="presta c-presta">${h(l.libelle)}${l.note ? ' <span class="vide">· ' + h(l.note) + '</span>' : ''}</td>
+      <td class="num c-mont" data-l="Montant">${E(l.montant)}</td><td class="num c-verse" data-l="Versé">${N.verse(l) ? E(N.verse(l)) : TIRET}</td><td class="num c-reste" data-l="Reste">${r ? '<b>' + E(r) + '</b>' : TIRET}</td>
+      <td class="c-statut">${pillStatut(l)}${l.relanceLe && N.reste(l) > 0 ? '<span class="sous-pill">relancé le ' + h(jourMois(l.relanceLe)) + '</span>' : ''}</td>
+      <td class="nowrap c-paye" data-l="Payé le">${d ? h(jourMois(d.date)) + ' · ' + N.modesDe(l).map(m => N.NOM_MODE[m].toLowerCase()).join(' + ') : TIRET}</td>
+      <td class="nowrap c-depot" data-l="Dépôt">${celluleDepot(l)}</td>
+      <td class="act">${r > 0 ? bt('Encaisser', 'encaisser', `data-id="${l.id}"`, 'pri') + bt('Relancer', 'relancer', `data-pid="${l.patientId}"`, '') : ''}${bt('Modifier', 'ligne', `data-id="${l.id}"`, 'link')}</td></tr>`;
+  }
+  // Les lignes affichées : le mois choisi, ou un filtre sur tout le livre. Une recherche lancée depuis « Le mois » porte sur tout le livre.
+  // ---------- colonnes du livre : tri et filtres ----------
+  // Chaque colonne : son titre, la valeur qui sert au tri, et pour les colonnes à filtrer, les étiquettes d'une ligne.
+  const RANG_STATUT = { impayee: 0, partielle: 1, payee: 2 };
+  const etiquetteDepot = l => { const t = l.versements.filter(v => v.mode !== 'virement'); return !t.length ? 'Sans chèque ni espèces' : t.some(v => !v.deposeLe) ? 'À déposer' : 'Déposé'; };
+  const COLS = [
+    { id: 'date', lib: 'Date', type: 'date', tri: l => l.date },
+    { id: 'facture', lib: 'Facture', type: 'ordre', tri: l => l.facture === false ? 0 : 1, cats: l => [l.facture === false ? 'À faire' : 'Faite'], ordreCats: ['À faire', 'Faite'], sens: ['À faire d’abord', 'Faites d’abord'] },
+    { id: 'patient', lib: 'Patient', type: 'texte', tri: l => N.nomPatient(patient(l.patientId)), cats: l => [N.nomPatient(patient(l.patientId))] },
+    { id: 'prestation', lib: 'Prestation', type: 'texte', tri: l => l.libelle, cats: l => [l.libelle] },
+    { id: 'montant', lib: 'Montant', type: 'num', tri: l => l.montant },
+    { id: 'verse', lib: 'Versé', type: 'num', tri: N.verse },
+    { id: 'reste', lib: 'Reste', type: 'num', tri: N.reste },
+    { id: 'statut', lib: 'Statut', type: 'ordre', tri: l => RANG_STATUT[N.statut(l)], cats: l => [N.NOM_STATUT[N.statut(l)]].concat(l.relanceLe && N.reste(l) > 0 ? ['Relancée'] : []), ordreCats: ['Impayée', 'Partiellement payée', 'Payée', 'Relancée'] },
+    { id: 'paye', lib: 'Payé le', type: 'date', tri: l => { const d = N.dernierVersement(l); return d ? d.date : ''; }, cats: l => l.versements.length ? N.modesDe(l).map(m => N.NOM_MODE[m]) : ['Pas encore payé'], ordreCats: ['Espèces', 'Chèque', 'Virement', 'Pas encore payé'] },
+    { id: 'depot', lib: 'Dépôt', type: 'texte', tri: etiquetteDepot, cats: l => [etiquetteDepot(l)], ordreCats: ['À déposer', 'Déposé', 'Sans chèque ni espèces'] }
+  ];
+  const COL = id => COLS.find(c => c.id === id);
+  const SENS = { date: ['Du plus ancien au plus récent', 'Du plus récent au plus ancien'], texte: ['De A à Z', 'De Z à A'], num: ['Du plus petit au plus grand', 'Du plus grand au plus petit'], ordre: ['Impayées d’abord', 'Payées d’abord'] };
+  const filtreActif = id => Array.isArray(F.filtres[id]);
+  const passeFiltres = (l, sauf) => COLS.every(c => c.id === sauf || !filtreActif(c.id) || c.cats(l).some(v => F.filtres[c.id].indexOf(v) >= 0));
+  // Les lignes de base (le mois, les impayées, à déposer, ou la recherche), avant les filtres de colonnes, dans l'ordre du livre.
+  function lignesDeBase() {
+    const q = N.sansAccent(F.texte.trim());
+    let liste = F.filtre === 'impayees' ? etat.lignes.filter(l => N.reste(l) > 0)
+      : F.filtre === 'deposer' ? etat.lignes.filter(l => l.versements.some(v => v.mode !== 'virement' && !v.deposeLe))
+      : q ? etat.lignes : etat.lignes.filter(l => l.date.slice(0, 7) === F.mois);
+    if (q) liste = liste.filter(l => N.sansAccent(N.nomPatient(patient(l.patientId)) + ' ' + l.libelle + ' ' + l.note).indexOf(q) >= 0);
+    return liste;
+  }
+  // Sans tri choisi : le plus récent en haut, comme avant. Avec un tri : à valeur égale, le plus récent en haut.
+  function trier(liste) {
+    const rang = new Map(liste.map((l, i) => [l, i])), recents = liste.slice().reverse();
+    if (!F.tri) return recents;
+    const c = COL(F.tri.col), k = F.tri.sens === 'desc' ? -1 : 1;
+    const cmp = (a, b) => { const x = c.tri(a), y = c.tri(b); return typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'fr', { sensitivity: 'base', numeric: true }); };
+    return recents.sort((a, b) => k * cmp(a, b) || rang.get(b) - rang.get(a));
+  }
+  function enTete(c) {
+    const actif = F.tri && F.tri.col === c.id, filtre = filtreActif(c.id);
+    return `<th class="${c.type === 'num' ? 'num ' : ''}${actif || filtre ? 'actif' : ''}"${actif ? ` aria-sort="${F.tri.sens === 'asc' ? 'ascending' : 'descending'}"` : ''}><button type="button" class="th-btn" data-a="colMenu" data-col="${c.id}" aria-haspopup="true" aria-expanded="${F.menuCol === c.id}" title="Trier${c.cats ? ' ou filtrer' : ''}">${h(c.lib)}<span class="th-ind" aria-hidden="true">${actif ? (F.tri.sens === 'asc' ? '▲' : '▼') : ''}${filtre ? '<svg viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>' : ''}${!actif && !filtre ? '▾' : ''}</span></button></th>`;
+  }
+  function htmlLivre() {
+    const q = N.sansAccent(F.texte.trim()), base = lignesDeBase(), filtres = COLS.filter(c => filtreActif(c.id));
+    const vues = base.filter(l => passeFiltres(l));
+    const total = vues.length;
+    const liste = trier(vues).slice(0, q ? 200 : total);
+    const bandeau = filtres.length || F.tri ? `<div class="filtres-actifs">${F.tri ? `<span class="puce">Tri : ${h(COL(F.tri.col).lib)}, ${h((COL(F.tri.col).sens || SENS[COL(F.tri.col).type])[F.tri.sens === 'asc' ? 0 : 1].toLowerCase())}</span>` : ''}${filtres.map(c => `<span class="puce">${h(c.lib)} : ${h(F.filtres[c.id].length ? F.filtres[c.id].join(', ') : 'rien')}</span>`).join('')}
+      <button type="button" class="btn sm link" data-a="colToutEffacer">Tout effacer</button>${filtres.length ? `<span class="vide">${pluriel(total, 'ligne affichée', 'lignes affichées')} sur ${base.length}</span>` : ''}</div>` : '';
+    if (!total && !(filtres.length && base.length)) return bandeau + `<p class="videtxt">${q ? 'Aucune ligne ne correspond à cette recherche.' : F.filtre === 'impayees' ? 'Tout est payé.' : F.filtre === 'deposer' ? 'Rien à déposer en banque.' : 'Aucune ligne en ' + h(N.nomMois(F.mois)) + '.'}</p>`;
+    return bandeau + `<div class="tablewrap"><table class="t livre"><thead><tr>${COLS.map(enTete).join('')}<th></th></tr></thead>
+      <tbody>${liste.map(ligneLivre).join('') || `<tr><td colspan="${COLS.length + 1}" class="videtxt">Aucune ligne ne correspond aux filtres.</td></tr>`}</tbody>
+      <tfoot><tr><td colspan="4">${pluriel(liste.length, 'ligne', 'lignes')}</td><td class="num" data-l="Montant">${E(somme(liste, l => l.montant))}</td><td class="num" data-l="Versé">${E(somme(liste, N.verse))}</td><td class="num" data-l="Reste">${E(somme(liste, N.reste))}</td><td colspan="4"></td></tr></tfoot></table></div>
+      ${q && F.filtre === 'mois' ? `<p class="pied">Recherche dans tout le livre${total > liste.length ? ' : les 200 lignes les plus récentes sur ' + total : ''}.</p>` : ''}`;
+  }
+  // Le menu d'une colonne : trier dans un sens ou dans l'autre ; pour les colonnes à étiquettes, cocher ce qu'on veut voir.
+  function htmlMenuCol(c) {
+    const autres = lignesDeBase().filter(l => passeFiltres(l, c.id)), compte = {};
+    if (c.cats) autres.forEach(l => c.cats(l).forEach(v => { compte[v] = (compte[v] || 0) + 1; }));
+    if (c.cats && filtreActif(c.id)) F.filtres[c.id].forEach(v => { if (!(v in compte)) compte[v] = 0; });
+    const valeurs = Object.keys(compte).sort((a, b) => c.ordreCats ? c.ordreCats.indexOf(a) - c.ordreCats.indexOf(b) : a.localeCompare(b, 'fr'));
+    const coche = v => !filtreActif(c.id) || F.filtres[c.id].indexOf(v) >= 0;
+    const sens = c.sens || SENS[c.type], tri = F.tri && F.tri.col === c.id ? F.tri.sens : '';
+    return `<div class="menu-titre">${h(c.lib)}</div>
+      <button type="button" class="menu-item${tri === 'asc' ? ' on' : ''}" data-a="colTri" data-col="${c.id}" data-sens="asc">${h(sens[0])}</button>
+      <button type="button" class="menu-item${tri === 'desc' ? ' on' : ''}" data-a="colTri" data-col="${c.id}" data-sens="desc">${h(sens[1])}</button>
+      ${c.cats ? `<div class="menu-sep">Afficher</div>
+      <label class="menu-coche"><input type="checkbox" data-c="colTout" data-col="${c.id}"${valeurs.every(coche) ? ' checked' : ''}><b>Tout</b></label>
+      <div class="menu-liste">${valeurs.map(v => `<label class="menu-coche"><input type="checkbox" data-c="colFiltre" data-col="${c.id}" value="${h(v)}"${coche(v) ? ' checked' : ''}><span>${h(v)}</span><span class="vide">${compte[v]}</span></label>`).join('') || '<p class="vide">Aucune valeur.</p>'}</div>` : ''}
+      ${tri || filtreActif(c.id) ? `<button type="button" class="menu-item effacer" data-a="colEffacer" data-col="${c.id}">Effacer le tri et le filtre de cette colonne</button>` : ''}`;
+  }
+  function fermerMenuCol() { const m = $('#menu-col'); if (m) m.remove(); F.menuCol = ''; }
+  function placerMenuCol() {
+    const m = $('#menu-col'), b = F.menuCol && $('.th-btn[data-col="' + F.menuCol + '"]');
+    if (!m || !b) return fermerMenuCol();
+    const r = b.getBoundingClientRect(), l = Math.max(8, Math.min(r.left, window.innerWidth - m.offsetWidth - 8));
+    m.style.left = (l + window.scrollX) + 'px'; m.style.top = (r.bottom + window.scrollY + 4) + 'px';
+  }
+  // Après un changement : le tableau est refait, le menu reste ouvert et à sa place.
+  function majLivre() {
+    $('#livre').innerHTML = htmlLivre();
+    const m = $('#menu-col');
+    if (m && F.menuCol) { m.innerHTML = htmlMenuCol(COL(F.menuCol)); placerMenuCol(); }
+  }
+  // La case « Facture » : faite dans Docorga, ou encore à faire. Simple repère : les calculs ne changent pas.
+  CHANGES.facture = el => {
+    if (muter(() => N.marquerFacture(etat, el.dataset.id, el.checked))) { majLivre(); toast(el.checked ? 'Facture marquée comme faite.' : 'Facture marquée « à faire ». L’Urssaf et l’impôt restent calculés sur ce qui est encaissé.'); }
+  };
+  ACTIONS.colMenu = el => {
+    const id = el.dataset.col;
+    if (F.menuCol === id) { fermerMenuCol(); $('#livre').innerHTML = htmlLivre(); return; }
+    fermerMenuCol();
+    F.menuCol = id;
+    const m = document.createElement('div');
+    m.id = 'menu-col'; m.className = 'menu-col'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Trier ou filtrer : ' + COL(id).lib);
+    m.innerHTML = htmlMenuCol(COL(id));
+    document.body.appendChild(m);
+    $('#livre').innerHTML = htmlLivre();
+    placerMenuCol();
+    const f = $('.menu-item', m); if (f) f.focus();
+  };
+  ACTIONS.colTri = el => { const c = el.dataset.col, s = el.dataset.sens; F.tri = F.tri && F.tri.col === c && F.tri.sens === s ? null : { col: c, sens: s }; fermerMenuCol(); majLivre(); };
+  ACTIONS.colEffacer = el => { const c = el.dataset.col; delete F.filtres[c]; if (F.tri && F.tri.col === c) F.tri = null; fermerMenuCol(); majLivre(); };
+  ACTIONS.colToutEffacer = () => { F.filtres = {}; F.tri = null; fermerMenuCol(); majLivre(); };
+  CHANGES.colTout = el => { const c = el.dataset.col; if (el.checked) delete F.filtres[c]; else F.filtres[c] = []; majLivre(); };
+  CHANGES.colFiltre = el => {
+    const c = el.dataset.col, toutes = $$('#menu-col input[data-c="colFiltre"]').map(x => x.value);
+    let choix = filtreActif(c) ? F.filtres[c].slice() : toutes.slice();
+    choix = el.checked ? choix.concat([el.value]) : choix.filter(v => v !== el.value);
+    if (toutes.every(v => choix.indexOf(v) >= 0)) delete F.filtres[c]; else F.filtres[c] = choix;
+    majLivre();
+  };
+  // Un clic ailleurs, ou Échap, ferme le menu.
+  document.addEventListener('mousedown', ev => { if (F.menuCol && !ev.target.closest('#menu-col') && !ev.target.closest('.th-btn')) { fermerMenuCol(); $('#livre').innerHTML = htmlLivre(); } }, true);
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && F.menuCol) { const id = F.menuCol; fermerMenuCol(); $('#livre').innerHTML = htmlLivre(); const b = $('.th-btn[data-col="' + id + '"]'); if (b) b.focus(); } });
+  window.addEventListener('resize', () => { if (F.menuCol) placerMenuCol(); });
+  document.addEventListener('scroll', ev => { if (F.menuCol && ev.target !== document && ev.target.classList && ev.target.classList.contains('tablewrap')) placerMenuCol(); }, true);   // tableau défilé de côté : le menu suit sa colonne
+
+  VUES.encaissements = function () {
+    const j = auj(), dep = N.aDeposer(etat), impayees = etat.lignes.filter(l => N.reste(l) > 0);
+    // Les deux totaux portent sur le mois affiché : paiements reçus dans le mois, et reste dû sur les rendez-vous du mois.
+    const encMois = N.synthese(etat, F.mois).encaisse, resteMois = somme(etat.lignes.filter(l => l.date.slice(0, 7) === F.mois), N.reste);
+    const seg = [['mois', 'Le mois'], ['impayees', 'Impayées · ' + impayees.length], ['deposer', 'À déposer · ' + dep.length]];
+    return `
+    <div class="titre"><div><h2>Encaissements</h2><p class="lead">Une ligne par rendez-vous : ce qui est dû, ce qui est payé, ce qui attend d’être déposé en banque. Les factures se font dans Docorga.</p></div>
+      <div class="row"><button type="button" class="btn" data-a="exporter" data-an="${F.mois.slice(0, 4)}">Exporter</button>${boutonDepot()}</div></div>
+    ${htmlRappel()}${avis()}
+    <section class="card">
+      <form data-f="ajout" novalidate class="ajout">
+        <div><label for="aj-date">Date</label><input type="date" id="aj-date" value="${F.saisieDate || j}" max="${j}" data-garde data-c="ajDate"></div>
+        <div><label for="aj-patient">Patient</label><input id="aj-patient" list="liste-patients" autocomplete="off" placeholder="Prénom Nom" data-garde data-c="ajPatient"></div>
+        <div><label for="aj-prestation">Prestation</label><select id="aj-prestation" data-garde data-c="ajPrestation">${optionsPrestations('suivi')}</select></div>
+        <div><label for="aj-montant">Montant (€)</label><input id="aj-montant" inputmode="decimal" autocomplete="off" data-garde></div>
+        <div><label for="aj-mode">Paiement</label><select id="aj-mode" data-garde><option value="">Pas encore payé</option><option value="especes">Payé en espèces</option><option value="cheque">Payé par chèque</option><option value="virement">Virement déjà reçu</option></select></div>
+        <div class="fin"><button type="submit" class="btn pri">Ajouter la ligne</button></div>
+      </form>
+      <p class="note" id="aj-info"></p><p class="erreur" id="aj-erreur" role="alert"></p>
+    </section>
+    ${listePatients()}
+    <div class="outils bloc">
+      ${F.filtre === 'mois' ? navMois(F.mois, 'mois') : ''}
+      <div class="seg" role="group" aria-label="Lignes affichées">${seg.map(o => `<button type="button" data-a="filtre" data-f="${o[0]}"${F.filtre === o[0] ? ' class="on" aria-pressed="true"' : ''}>${o[1]}</button>`).join('')}</div>
+      <input type="search" id="enc-recherche" data-saisie="recherche" placeholder="Rechercher un patient, une prestation" value="${h(F.texte)}" aria-label="Rechercher dans le livre">
+      <span class="note totaux" title="Encaissé : les paiements reçus dans le mois, quelle que soit la date du rendez-vous. Reste à encaisser : ce qui reste dû sur les rendez-vous du mois.">${F.filtre === 'mois' ? '' : h(N.nomMois(F.mois)) + ' · '}Encaissé : <b>${E(encMois)}</b> · Reste à encaisser : <b>${E(resteMois)}</b></span>
+    </div>
+    <div id="livre">${htmlLivre()}</div>`;
+  };
+  // Sous le formulaire : une date qui n'est pas celle du jour, un nouveau patient, une double saisie, la déduction d'un bilan.
+  // quoi = 'force' (la prestation change : on propose son tarif), 'doux' (on ne touche pas à un montant saisi à la main), '' (rien).
+  function ajInfo(quoi) {
+    const zone = $('#aj-info'), nom = $('#aj-patient').value, p = N.trouverPatient(etat, nom), prest = $('#aj-prestation').value, d = $('#aj-date').value || auj();
+    const prop = N.montantPropose(etat, p ? p.id : '', prest, { date: d }), t = N.par(etat.prestations, prest), champ = $('#aj-montant'), propose = t ? N.saisie(prop.montant) : '';
+    if (quoi === 'force' || (quoi === 'doux' && (champ.value === '' || champ.value === F.ajPropose))) champ.value = propose;
+    F.ajPropose = propose;
+    const autreJour = d !== auj(), txt = [];
+    $('#aj-date').classList.toggle('autre-jour', autreJour);   // une date qui n'est pas celle du jour se voit dans le champ lui-même
+    if (autreJour) txt.push('Ligne datée du ' + N.dateFr(d) + ', et non d’aujourd’hui.');
+    const deja = p ? N.ligneDuJour(etat, p.id, d) : null;
+    if (N.cleNom(nom) && !p) txt.push('Nouveau patient : sa fiche sera créée.');
+    if (deja) txt.push('Attention : ' + p.nom + ' a déjà une ligne à cette date (' + deja.libelle + ').');
+    if (prop.deduit && t) txt.push(t.libelle + ' : ' + E(t.tarif) + ', moins ' + E(prop.deduit) + ' déjà comptés pour le 1er rendez-vous.');
+    zone.textContent = txt.join(' ');
+    zone.classList.toggle('alerte', !!deja);
+  }
+  CHANGES.ajPatient = () => ajInfo('doux');
+  CHANGES.ajPrestation = () => ajInfo('force');
+  CHANGES.ajDate = () => ajInfo('doux');
+  FORMS.ajout = function () {
+    const date = $('#aj-date').value, nom = $('#aj-patient').value, m = N.versCentimes($('#aj-montant').value), mode = $('#aj-mode').value, zone = '#aj-erreur';
+    erreur('', zone);
+    if (!N.cleNom(nom) && Date.now() - F.dernierAjout < 800) return;   // double clic : la ligne vient d'être ajoutée
+    if (auj() !== F.jour) { rendre(); return erreur('La date du jour a changé depuis l’ouverture : vérifiez la date, puis ajoutez la ligne.', zone); }
+    if (!N.cleNom(nom)) return erreur('Indiquez le patient.', zone);
+    if (!(m > 0)) return erreur('Indiquez le montant, par exemple 80.', zone);
+    if (!date) return erreur('Indiquez la date.', zone);
+    if (date > auj()) return erreur('La date ne peut pas être dans le futur.', zone);
+    const prestation = $('#aj-prestation').value;
+    const faire = () => muter(() => {
+      const x = N.ajouterLigne(etat, { date: date, patientNom: nom, prestationId: prestation, montant: m });
+      if (mode) N.encaisser(etat, x.id, { date: date, montant: m, mode: mode });
+      return x;
+    }, zone);
+    const ensuite = l => {
+      F.saisieDate = date; F.mois = date.slice(0, 7); F.filtre = 'mois'; F.texte = ''; F.dernierAjout = Date.now();
+      rendre({ vierge: true });
+      toast('Ligne ajoutée pour ' + N.nomPatient(patient(l.patientId)) + (mode ? ', payée (' + N.NOM_MODE[mode].toLowerCase() + ').' : ', pas encore payée.'));
+      $('#aj-patient').focus();
+    };
+    // Une date de plus de deux mois est confirmée : c'est le plus souvent une faute de frappe sur l'année.
+    if (date < N.ajouterJours(auj(), -62)) {
+      let l;
+      return confirmer('Ajouter une ligne au ' + N.dateFr(date) + ' ?', 'Cette date remonte à plus de deux mois. Vérifiez l’année avant d’ajouter la ligne.', 'Ajouter la ligne',
+        () => { l = faire(); return !!l; }, { apres: () => ensuite(l), prudent: true });
+    }
+    const l = faire();
+    if (l) ensuite(l);
+  };
+  ACTIONS.mois = el => { const m = N.ajouterMois(F.mois, +el.dataset.d); if (m <= auj().slice(0, 7)) { F.mois = m; rendre(); } };
+  ACTIONS.filtre = el => { F.filtre = el.dataset.f; rendre(); };
+  SAISIES.recherche = el => { F.texte = el.value; fermerMenuCol(); $('#livre').innerHTML = htmlLivre(); };
+
+  // --- exporter les encaissements de l'année choisie
+  ACTIONS.exporter = el => {
+    const ans = N.annees(etat), j = auj().slice(0, 4);
+    if (ans.indexOf(j) < 0) ans.unshift(j);
+    const choix = ans.indexOf(el.dataset.an) >= 0 ? el.dataset.an : ans[0];
+    ouvrir(`<h3>Exporter</h3>
+      <p class="note">Un fichier à ouvrir dans le tableur : une ligne par paiement reçu dans l’année, avec la date, le patient, la prestation, le montant, le moyen de paiement et le dépôt en banque. Le livre de recettes officiel reste celui de Docorga.</p>
+      <div class="champs"><label for="exp-annee">Année</label><select id="exp-annee">${ans.map(a => `<option${a === choix ? ' selected' : ''}>${a}</option>`).join('')}</select></div>
+      <p class="note" id="exp-info" role="status"></p><p class="erreur" id="dlg-erreur" role="alert"></p>
+      <div class="row fin"><button type="button" class="btn" data-a="fermer">Fermer</button><button type="button" class="btn pri" data-a="csvEncaissements">Exporter les encaissements</button></div>`);
+  };
+  async function exporter(nom, csv, bilan) {
+    const an = $('#exp-annee').value, zone = $('#exp-info');
+    erreur(''); zone.textContent = '';
+    if (await telecharger(nom + '-' + an + '.csv', csv(an + '-01-01', an + '-12-31'), 'text/csv') && zone.isConnected) zone.textContent = bilan(an);
+  }
+  ACTIONS.csvEncaissements = () => exporter('encaissements', (a, b) => N.exportEncaissements(etat, a, b),
+    an => 'Encaissements ' + an + ' : ' + pluriel(somme(etat.lignes, l => l.versements.filter(v => v.date.slice(0, 4) === an).length), 'paiement', 'paiements') + '.');
+
+  // --- encaisser une ligne
+  function dernierMode(pid) {
+    let d = null;
+    etat.lignes.forEach(l => { if (l.patientId === pid) l.versements.forEach(v => { if (!d || v.date >= d.date) d = v; }); });
+    return d ? d.mode : '';
+  }
+  const modeChoisi = () => { const x = $('input[name="enc-mode"]:checked', dlg); return x ? x.value : ''; };
+  ACTIONS.encaisser = el => {
+    const l = N.par(etat.lignes, el.dataset.id), j = auj(), mode = dernierMode(l.patientId);
+    ouvrir(`<form data-f="encaisser" data-id="${l.id}" novalidate>
+      <h3>Encaisser</h3>
+      <p class="note">${h(N.nomPatient(patient(l.patientId)))} · ${h(l.libelle)} du ${h(N.dateFr(l.date))}${N.verse(l) ? ' · déjà versé ' + E(N.verse(l)) : ''} · reste ${E(N.reste(l))}</p>
+      <div class="champs">
+        <label for="enc-montant">Montant reçu (€)</label><input id="enc-montant" inputmode="decimal" autocomplete="off" value="${N.saisie(N.reste(l))}" autofocus>
+        <span class="lbl" id="enc-mode-lbl">Moyen de paiement</span>
+        <div class="modes" role="radiogroup" aria-labelledby="enc-mode-lbl">${N.MODES.map(m => `<label><input type="radio" name="enc-mode" id="enc-mode-${m}" value="${m}"${m === mode ? ' checked' : ''}> ${N.NOM_MODE[m]}</label>`).join('')}</div>
+        <label for="enc-date">Payé le</label><input type="date" id="enc-date" value="${j}" max="${j}">
+      </div>
+      <p class="note">Pour un virement, indiquez la date où il apparaît sur le compte.</p>
+      <p class="erreur" id="dlg-erreur" role="alert"></p>
+      <div class="row fin"><button type="button" class="btn" data-a="fermer">Annuler</button><button type="submit" class="btn pri">Enregistrer le paiement</button></div>
+    </form>`);
+  };
+  FORMS.encaisser = function (form) {
+    const m = N.versCentimes($('#enc-montant').value), date = $('#enc-date').value, mode = modeChoisi();
+    if (!(m > 0)) return erreur('Indiquez le montant reçu, par exemple 80.');
+    if (date > auj()) return erreur('La date du paiement ne peut pas être dans le futur.');
+    if (!muter(() => { N.encaisser(etat, form.dataset.id, { date: date, montant: m, mode: mode }); })) return;
+    fermer(); rendre();
+    toast('Paiement de ' + E(m) + ' enregistré (' + N.NOM_MODE[mode].toLowerCase() + ').' + (mode === 'virement' ? '' : ' À déposer en banque en fin de mois.'));
+  };
+
+  // --- modifier une ligne
+  function dlgLigne(id) {
+    const l = N.par(etat.lignes, id), fige = '';
+    const prestations = (N.par(etat.prestations, l.prestationId) ? '' : `<option value="${l.prestationId}" selected>${h(l.libelle)}</option>`) + optionsPrestations(l.prestationId);
+    const vers = l.versements.map(v => `<li><div class="txt"><b>${E(v.montant)} · ${N.NOM_MODE[v.mode].toLowerCase()}</b><span>Payé le ${h(N.dateFr(v.date))}${v.mode === 'virement' ? '' : v.deposeLe ? ' · déposé le ' + h(N.dateFr(v.deposeLe)) : ' · à déposer'}</span></div>
+      <div class="act">${v.deposeLe ? bt('Annuler le dépôt', 'depotAnnuler', `data-id="${l.id}" data-v="${v.id}"`, 'link') : ''}${bt('Supprimer', 'versementSupprimer', `data-id="${l.id}" data-v="${v.id}"`, 'link danger')}</div></li>`).join('');
+    ouvrir(`<form data-f="ligne" data-id="${l.id}" novalidate>
+      <h3>Modifier la ligne</h3>
+      <div class="champs">
+        <label for="lig-date">Date</label><input type="date" id="lig-date" value="${l.date}" max="${auj()}"${fige}>
+        <label for="lig-patient">Patient</label><input id="lig-patient" list="liste-patients" value="${h(N.nomPatient(patient(l.patientId)))}" autocomplete="off"${fige}>
+        <label for="lig-prestation">Prestation</label><select id="lig-prestation"${fige}>${prestations}</select>
+        <label for="lig-montant">Montant (€)</label><input id="lig-montant" inputmode="decimal" autocomplete="off" value="${N.saisie(l.montant)}"${fige}>
+        <label for="lig-note">Note</label><input id="lig-note" value="${h(l.note)}" autocomplete="off" placeholder="Pour soi">
+      </div>
+      <p class="note">Changer le nom ici rattache cette ligne à un autre patient. Pour corriger l’orthographe d’un nom partout : Paramètres, Patients.</p>
+      ${vers ? `<p class="sous">Paiements reçus</p><ul class="liste">${vers}</ul>` : ''}
+      <p class="erreur" id="dlg-erreur" role="alert"></p>
+      <div class="row fin"><button type="button" class="btn link danger" data-a="ligneSupprimer" data-id="${l.id}">Supprimer la ligne</button><span class="sp"></span><button type="button" class="btn" data-a="fermer">Fermer</button><button type="submit" class="btn pri">Enregistrer</button></div>
+    </form>`);
+  }
+  ACTIONS.ligne = el => dlgLigne(el.dataset.id);
+  FORMS.ligne = function (form) {
+    const l = N.par(etat.lignes, form.dataset.id), m = N.versCentimes($('#lig-montant').value), date = $('#lig-date').value;
+    if (m === null) return erreur('Indiquez le montant, par exemple 80.');
+    if (date > auj()) return erreur('La date ne peut pas être dans le futur.');
+    const d = { note: $('#lig-note').value, date: date, patientNom: $('#lig-patient').value, prestationId: $('#lig-prestation').value, montant: m };
+    if (!muter(() => { N.modifierLigne(etat, l.id, d); })) return;
+    fermer(); rendre();
+  };
+  ACTIONS.versementSupprimer = el => {
+    const id = el.dataset.id, l = N.par(etat.lignes, id), v = N.par(l.versements, el.dataset.v);
+    confirmer('Supprimer ce paiement ?', 'Paiement de ' + E(v.montant) + ' (' + N.NOM_MODE[v.mode].toLowerCase() + ') reçu le ' + N.dateFr(v.date) + '. La ligne ne le comptera plus.', 'Supprimer le paiement',
+      () => muter(() => { N.supprimerVersement(etat, id, v.id); }), { danger: true, retour: () => dlgLigne(id), apres: () => dlgLigne(id) });
+  };
+  ACTIONS.depotAnnuler = el => { if (muter(() => { N.annulerDepot(etat, el.dataset.id, el.dataset.v); })) { rendre(); dlgLigne(el.dataset.id); } };
+  ACTIONS.ligneSupprimer = el => {
+    const l = N.par(etat.lignes, el.dataset.id);
+    if (l.versements.length) return erreur('Un paiement est enregistré sur cette ligne : supprimez-le d’abord, dans la liste ci-dessus.');
+    confirmer('Supprimer cette ligne ?', l.libelle + ' du ' + N.dateFr(l.date) + ' pour ' + N.nomPatient(patient(l.patientId)) + ', ' + E(l.montant) + '. Elle disparaît du livre.', 'Supprimer la ligne',
+      () => muter(() => { N.supprimerLigne(etat, l.id); }), { danger: true, non: 'Garder la ligne', retour: () => dlgLigne(l.id), apres: () => toast('Ligne supprimée.') });
+  };
+
+  // --- relancer un patient par mail : ses rendez-vous impayés, un mail tout fait, ouvert dans la messagerie de l'ordinateur ou dans Gmail
+  const relCoches = () => $$('input[name="rel"]:checked', dlg).map(x => x.value);
+  const relMail = () => { const p = patient(F.rel.pid); return { a: p && N.adresseValide(p.email) ? p.email : '', objet: F.rel.objet, texte: F.rel.texte }; };
+  const lienMail = m => etat.mail.messagerie === 'gmail' ? N.lienGmail(m) : N.lienMailto(m);
+  function relRefaire() {   // les rendez-vous cochés changent : objet et message repartent du modèle
+    const m = N.mailRelance(etat, F.rel.pid, relCoches());
+    F.rel.objet = m.objet; F.rel.texte = m.texte;
+    $('#rel-objet').value = m.objet; $('#rel-texte').value = m.texte;
+    $('#rel-total').textContent = m.lignes.length ? pluriel(m.lignes.length, 'rendez-vous', 'rendez-vous') + ' · ' + E(m.total) : 'Aucun rendez-vous coché';
+    relLien();
+  }
+  function relLien() {
+    const m = relMail(), p = patient(F.rel.pid), a = p ? p.email : '';
+    $('#rel-lien').href = lienMail(m);
+    $('#rel-avis').textContent = !a ? 'Sans adresse : le mail s’ouvrira sans destinataire.' : N.adresseValide(a) ? '' : 'Adresse incomplète : le mail s’ouvrira sans destinataire.';
+  }
+  ACTIONS.relancer = el => {
+    const p = patient(el.dataset.pid), lignes = N.impayeesDe(etat, el.dataset.pid);
+    if (!p || !lignes.length) return;
+    const m = N.mailRelance(etat, p.id);
+    F.rel = { pid: p.id, objet: m.objet, texte: m.texte };
+    const gmail = etat.mail.messagerie === 'gmail';
+    ouvrir(`<h3>Relancer ${h(p.nom)}</h3>
+      <p class="note">Les rendez-vous encore dus. Décochez ceux à ne pas mentionner : le message se refait.</p>
+      <ul class="liste">${lignes.map(l => `<li><label class="coche"><input type="checkbox" name="rel" value="${l.id}" checked data-c="relCase"><span class="txt"><b>${h(N.dateFr(l.date))} · ${E(N.reste(l))}</b><span>${h(l.libelle)}${N.verse(l) ? ' · déjà versé ' + E(N.verse(l)) : ''}${l.relanceLe ? ' · déjà relancé le ' + h(N.dateFr(l.relanceLe)) : ''}</span></span></label></li>`).join('')}</ul>
+      <p class="total" id="rel-total">${pluriel(lignes.length, 'rendez-vous', 'rendez-vous')} · ${E(m.total)}</p>
+      <div class="champs">
+        <label for="rel-email">À</label><input type="email" id="rel-email" value="${h(p.email)}" data-c="relEmail" autocomplete="off" placeholder="E-mail du patient, gardé sur sa fiche">
+        <label for="rel-objet">Objet</label><input id="rel-objet" value="${h(m.objet)}" data-saisie="relance" data-k="objet" autocomplete="off">
+        <label for="rel-texte">Message</label><textarea id="rel-texte" class="haut" data-saisie="relance" data-k="texte">${h(m.texte)}</textarea>
+      </div>
+      <p class="note alerte" id="rel-avis"></p><p class="erreur" id="dlg-erreur" role="alert"></p>
+      <p class="note">Le mail s’ouvre ${gmail ? 'dans Gmail' : 'dans la messagerie de l’ordinateur'}, prêt à partir : il reste à l’envoyer. La relance est notée sur les rendez-vous cochés. La messagerie se choisit dans les paramètres.</p>
+      <div class="row fin"><button type="button" class="btn" data-a="fermer">Fermer</button><a class="btn pri" id="rel-lien" href="#"${gmail ? ' target="_blank" rel="noopener"' : ''} data-a="relanceOuvrir" data-suivre>Ouvrir le mail${gmail ? ' dans Gmail' : ''}</a></div>`, true);
+    relLien();
+  };
+  CHANGES.relCase = () => relRefaire();
+  SAISIES.relance = el => { F.rel[el.dataset.k] = el.value; relLien(); };
+  CHANGES.relEmail = el => {
+    const p = patient(F.rel.pid);
+    if (!p) return;
+    if (!muter(() => { N.changerEmail(etat, p.id, el.value); })) { el.value = p.email; return relLien(); }
+    erreur(''); el.value = p.email; relLien();
+  };
+  ACTIONS.relanceOuvrir = (el, ev) => {
+    const ids = relCoches();
+    if (!ids.length) { ev.preventDefault(); return erreur('Cochez au moins un rendez-vous.'); }
+    if (!muter(() => N.noterRelance(etat, ids, auj()))) { ev.preventDefault(); return; }
+    const p = patient(F.rel.pid);
+    setTimeout(() => { fermer(); rendre(); toast('Relance de ' + p.nom + ' notée pour ' + pluriel(ids.length, 'rendez-vous', 'rendez-vous') + '. Le mail est ouvert : il reste à l’envoyer.'); }, 50);   // le lien part d'abord
+  };
+
+  // --- dépôts en banque
+  function dlgDepots() {
+    const dep = N.aDeposer(etat), faits = N.depots(etat).slice(0, 8), j = auj();
+    ouvrir(`<h3>Dépôts en banque</h3>
+      ${dep.length ? `<form data-f="deposer" novalidate>
+        <p class="note">Les chèques et les espèces reçus, pas encore déposés. Décochez ce qui reste au cabinet.</p>
+        <div class="tablewrap"><table class="t"><thead><tr><th><input type="checkbox" id="dep-tout" checked data-c="depTout" aria-label="Tout cocher"></th><th>Moyen</th><th>Reçu le</th><th>Patient</th><th class="num">Montant</th></tr></thead><tbody>
+        ${dep.map(x => `<tr><td><input type="checkbox" id="dep-${x.versement.id}" name="dep" value="${x.versement.id}" data-montant="${x.versement.montant}" data-mode="${x.versement.mode}" checked data-c="depCase" aria-label="Déposer ce paiement"></td><td>${N.NOM_MODE[x.versement.mode]}</td><td class="nowrap">${h(N.dateFr(x.versement.date))}</td><td>${h(N.nomPatient(patient(x.ligne.patientId)))}</td><td class="num">${E(x.versement.montant)}</td></tr>`).join('')}
+        </tbody></table></div>
+        <p class="total" id="dep-total"></p>
+        <div class="row"><label for="dep-date">Déposé le</label><input type="date" id="dep-date" value="${j}" max="${j}"><button type="submit" class="btn pri">Marquer comme déposés</button></div>
+      </form>` : '<p class="videtxt">Rien à déposer : tous les chèques et toutes les espèces reçus sont à la banque.</p>'}
+      <p class="erreur" id="dlg-erreur" role="alert"></p>
+      ${faits.length ? `<p class="sous">Derniers dépôts, à retrouver sur le relevé de la banque</p><ul class="liste">${faits.map(d => `<li><div class="txt"><b>${E(d.total)}</b><span>${h(N.dateFr(d.date))} · ${d.mode === 'cheque' ? pluriel(d.n, 'chèque', 'chèques') : 'espèces'}</span></div>
+        <div class="act">${bt('Annuler ce dépôt', 'depotsAnnuler', `data-date="${d.date}" data-mode="${d.mode}"`, 'link')}</div></li>`).join('')}</ul>` : ''}
+      <div class="row fin"><button type="button" class="btn" data-a="fermer">Fermer</button></div>`, true);
+    if (dep.length) depTotal();
+  }
+  function depTotal() {
+    const cases = $$('input[name="dep"]', dlg), ok = cases.filter(x => x.checked);
+    const de = mode => ok.filter(x => x.dataset.mode === mode), total = liste => somme(liste, x => +x.dataset.montant);
+    $('#dep-total').innerHTML = `${pluriel(de('cheque').length, 'chèque', 'chèques')} : <b>${E(total(de('cheque')))}</b> · espèces : <b>${E(total(de('especes')))}</b> · total : <b>${E(total(ok))}</b>`;
+    $('#dep-tout').checked = ok.length === cases.length;
+  }
+  ACTIONS.depots = () => dlgDepots();
+  CHANGES.depCase = () => depTotal();
+  CHANGES.depTout = el => { $$('input[name="dep"]', dlg).forEach(x => { x.checked = el.checked; }); depTotal(); };
+  FORMS.deposer = function () {
+    const ids = $$('input[name="dep"]:checked', dlg).map(x => x.value), d = $('#dep-date').value;
+    if (d > auj()) return erreur('La date du dépôt ne peut pas être dans le futur.');
+    const r = muter(() => N.deposer(etat, ids, d));
+    if (!r) return;
+    fermer(); rendre();
+    toast(pluriel(r.n, 'paiement déposé', 'paiements déposés') + ' : ' + E(r.total) + '.');
+  };
+  ACTIONS.depotsAnnuler = el => { if (muter(() => { N.annulerDepots(etat, el.dataset.date, el.dataset.mode); })) { rendre(); dlgDepots(); } };
+
+  // --- fiche d'un patient (depuis les paramètres) : un nom corrigé vaut pour toutes ses lignes
+  CHANGES.patient = el => {
+    const p = patient(el.dataset.id);
+    if (!p) return;
+    try { N.renommerPatient(etat, p.id, el.value); el.value = p.nom; noter(); }
+    catch (x) {
+      const autre = x.doublon ? patient(x.doublon) : null;
+      if (!autre) { el.value = p.nom; return toast(x.message, 'bad'); }
+      const n = N.lignesDe(etat, p.id).length;
+      confirmer('Réunir les deux fiches ?', '« ' + autre.nom + ' » existe déjà. ' + (n ? pluriel(n, 'ligne', 'lignes') + ' de « ' + p.nom + ' » ' + (n > 1 ? 'seront rattachées' : 'sera rattachée') + ' à cette fiche' : 'La fiche « ' + p.nom + ' », sans ligne, sera retirée') + '.', 'Réunir les fiches',
+        () => muter(() => { N.fusionnerPatients(etat, autre.id, p.id); }), { retour: () => { el.value = p.nom; } });
+    }
+  };
+
+  // ====================================================================== 3. SYNTHÈSE
+  // Histogramme des douze derniers mois, dessiné à la largeur réelle de la page, avec les deux seuils en repères.
+  function histogramme(s, L) {
+    const etroit = L < 640, H = 250, g = 46, d = etroit ? 10 : 156, haut = 20, bas = 28, zone = H - haut - bas, larg = (L - g - d) / 12;
+    const reperes = [['Seuil de confort', s.seuils.confort], ['Point mort', s.seuils.pointMort]].filter(r => r[1] != null);
+    const max = Math.max.apply(null, s.douze.map(m => m.encaisse).concat(reperes.map(r => r[1]), [100000])) * 1.1;
+    const pas = [25000, 50000, 100000, 200000, 250000, 500000, 1000000, 2000000, 5000000].find(p => max / p <= 5) || 10000000;
+    const y = v => Math.round((haut + zone - v / max * zone) * 10) / 10;
+    let svg = '';
+    for (let v = 0; v <= max; v += pas) svg += `<line class="g-grille" x1="${g}" x2="${L - d}" y1="${y(v)}" y2="${y(v)}"/><text class="g-axe" x="${g - 8}" y="${y(v) + 4}" text-anchor="end">${N.nombre(v)}</text>`;
+    s.douze.forEach((m, i) => {
+      const x = Math.round(g + i * larg + larg / 2), w = Math.max(6, Math.min(34, larg - 10)), y0 = y(0), y1 = y(m.encaisse), r = Math.max(0, Math.min(4, (y0 - y1) / 2, w / 2));
+      const actif = m.mois === s.mois, c = s.seuils.confort, court = N.MOIS_COURT[+m.mois.slice(5, 7) - 1];
+      const tip = N.nomMois(m.mois) + ' : ' + E(m.encaisse) + (c ? (m.encaisse >= c ? ' · seuil de confort atteint' : ' · ' + E(c - m.encaisse) + ' sous le seuil de confort') : '');
+      if (m.encaisse > 0) svg += `<path class="g-barre${actif ? ' on' : ''}" d="M${x - w / 2},${y0} V${y1 + r} Q${x - w / 2},${y1} ${x - w / 2 + r},${y1} H${x + w / 2 - r} Q${x + w / 2},${y1} ${x + w / 2},${y1 + r} V${y0} Z"/>`;
+      svg += `<text class="g-axe${actif ? ' on' : ''}" x="${x}" y="${H - 9}" text-anchor="middle">${larg < 36 ? court.charAt(0).toUpperCase() : court}</text>`;
+      svg += `<rect class="g-zone" x="${g + i * larg}" y="${haut}" width="${larg}" height="${zone + bas}" data-a="synMois" data-m="${m.mois}" data-tip="${h(tip)}" tabindex="0" role="button" aria-label="${h(tip)}"/>`;
+    });
+    svg += `<line class="g-base" x1="${g}" x2="${L - d}" y1="${y(0)}" y2="${y(0)}"/>`;
+    let bas0 = -99;
+    reperes.sort((a, b) => b[1] - a[1]);
+    // à droite du tracé : deux étiquettes de deux lignes, qui ne se chevauchent pas et ne sortent pas par le bas
+    const pos = reperes.map(r => { bas0 = Math.max(y(r[1]) + 4, bas0 + 34); return bas0; });
+    for (let i = pos.length - 1, plafond = H - 21; i >= 0; i--) { pos[i] = Math.min(pos[i], plafond); plafond = pos[i] - 34; }
+    bas0 = -99;
+    reperes.forEach((r, i) => {
+      const yy = y(r[1]);
+      svg += `<line class="g-seuil" x1="${g}" x2="${L - d + (etroit ? 0 : 6)}" y1="${yy}" y2="${yy}"/>`;
+      if (etroit) { const yt = yy - 5 < bas0 + 13 ? yy + 14 : yy - 5; bas0 = yt; svg += `<text class="g-etiq halo" x="${g + 4}" y="${yt}">${r[0]} · ${E(r[1])}</text>`; }
+      else svg += `<text class="g-etiq" x="${L - d + 12}" y="${pos[i]}">${r[0]}</text><text class="g-axe" x="${L - d + 12}" y="${pos[i] + 15}">${E(r[1])} par mois</text>`;
+    });
+    const act = s.douze[11];   // la valeur du mois affiché, par-dessus les repères, sans dépasser le bord droit
+    if (act.encaisse > 0) {
+      const txt = N.nombre(act.encaisse).replace(/\u202f/g, '\u00a0'), xv = Math.min(Math.round(g + 11 * larg + larg / 2), L - 3 - txt.length * 3.9);
+      svg += `<text class="g-valeur halo" x="${xv}" y="${y(act.encaisse) - 6}" text-anchor="middle">${txt}</text>`;
+    }
+    return `<svg width="${L}" height="${H}" viewBox="0 0 ${L} ${H}" role="img" aria-label="Encaissements des douze derniers mois, en euros">${svg}</svg>`;
+  }
+  function dessiner() {
+    const z = $('#graph');
+    if (z) z.innerHTML = histogramme(N.synthese(etat, F.synMois), Math.max(300, Math.floor(z.clientWidth)));
+  }
+  VUES.synthese = function () {
+    const s = N.synthese(etat, F.synMois), r = s.repartition, sl = s.seuils, p = etat.params, a = s.annee;
+    const mois = N.MOIS[+s.mois.slice(5, 7) - 1], cible = sl.confort || sl.pointMort, nomCible = sl.confort ? 'seuil de confort' : 'point mort';
+    const avance = pct(s.encaisse, cible), sansImpot = p.impot == null;
+    const parts = [['c1', 'Charges fixes', r.fixes], ['c2', 'Urssaf (' + taux(p.urssaf) + ')', r.urssaf], ['c3', 'Impôt à mettre de côté' + (sansImpot ? '' : ' (' + taux(p.impot) + ')'), r.impot], ['c4', 'Ce qu’il reste', Math.max(0, r.net)]];
+    const base = Math.max(s.encaisse, r.fixes + r.urssaf + r.impot);
+    const prest = Object.keys(s.parPrestation).sort((x, y) => s.parPrestation[y] - s.parPrestation[x]);
+    const periode = a.nbMois === 1 ? 'En ' + N.nomMois(s.mois) : 'De ' + N.MOIS[+a.debut.slice(5, 7) - 1] + ' à ' + N.nomMois(s.mois);
+    return `
+    <div class="titre"><div><h2>Synthèse</h2><p class="lead">Ce qui est encaissé, ce qu’il faut mettre de côté, et où en est le mois par rapport aux seuils.</p></div>${navMois(s.mois, 'synNav')}</div>
+    ${htmlRappel()}
+    ${s.debutLivre && s.mois < s.debutLivre ? `<p class="avis">Le livre commence en ${h(N.nomMois(s.debutLivre))} : rien n’est enregistré pour ${h(N.nomMois(s.mois))}.</p>` : ''}
+    <div class="tuiles">
+      <div class="tuile"><span class="lib">Encaissé en ${mois}</span><b>${E(s.encaisse)}</b>
+        ${cible ? `<div class="jauge" role="img" aria-label="${avance} % du ${nomCible}"><i class="${avance >= 100 ? 'ok' : ''}" style="width:${Math.min(100, avance)}%"></i></div>
+        <span class="sub">${avance} % du ${nomCible} (${E(cible)})${s.encaisse < cible ? ' · il manque ' + E(cible - s.encaisse) : ''}</span>` : '<span class="sub">Seuils à régler dans les paramètres</span>'}</div>
+      <div class="tuile"><span class="lib">À mettre de côté</span><b>${E(r.urssaf + r.impot)}</b><span class="sub">Urssaf ${E(r.urssaf)} · impôt ${sansImpot ? ': taux à renseigner' : E(r.impot)}</span></div>
+      <div class="tuile${r.net < 0 ? ' alerte' : ''}"><span class="lib">Ce qu’il reste</span><b>${E(r.net)}</b><span class="sub">Après ${E(r.fixes)} de charges fixes, l’Urssaf${sansImpot ? '' : ' et l’impôt'}</span></div>
+      <button type="button" class="tuile${s.impayes.n ? ' alerte' : ''}" data-a="voirImpayees"><span class="lib">Reste à encaisser</span><b>${E(s.impayes.total)}</b><span class="sub">${s.impayes.n ? pluriel(s.impayes.n, 'ligne impayée', 'lignes impayées') + ', la plus ancienne du ' + jourMois(s.impayes.plusAncienne) : 'Tout est payé'}${s.depot.n ? ' · ' + E(s.depot.total) + ' à déposer' : ''}</span></button>
+    </div>
+    <section class="card"><h3>Encaissements des douze derniers mois</h3>
+      <div class="graph" id="graph"></div>
+      <p class="note">${sl.confort ? 'Le seuil de confort couvre les charges fixes, l’Urssaf, l’impôt et le revenu net souhaité. ' : 'Indiquez le revenu net souhaité dans les paramètres pour voir le seuil de confort. '}Le point mort couvre seulement les charges. Cliquez sur un mois pour le détailler.</p></section>
+    <section class="card"><h3>Où vont les ${E(s.encaisse)} de ${mois}</h3>
+      ${s.encaisse === 0 ? '<p class="videtxt">Rien d’encaissé ce mois-ci.</p>' : `
+      ${r.net < 0 ? `<p class="avis">Les encaissements ne couvrent pas encore les charges du mois : il manque ${E(-r.net)}.</p>` : ''}
+      <div class="barre-parts" aria-hidden="true">${parts.filter(x => x[2] > 0).map(x => `<i class="${x[0]}" style="flex:${x[2]}" data-tip="${h(x[1] + ' : ' + E(x[2]) + ' · ' + pct(x[2], base) + ' %')}"></i>`).join('')}</div>
+      <table class="t leg"><tbody>${parts.map(x => { const absent = sansImpot && x[0] === 'c3'; return `<tr><td><i class="pastille ${x[0]}"></i>${h(x[1])}</td><td class="num">${absent ? TIRET : E(x[2])}</td><td class="num vide">${absent ? '' : pct(x[2], base) + ' %'}</td></tr>`; }).join('')}</tbody></table>`}
+      ${sansImpot ? `<p class="note">Le taux d’impôt à mettre de côté n’est pas encore réglé : ${lien('parametres', 'le régler dans les paramètres')}.</p>` : ''}
+    </section>
+    <div class="colonnes bloc">
+      <section class="card"><h3>${h(periode)}</h3>
+        ${a.encaisse === 0 ? '<p class="videtxt">Rien d’encaissé sur cette période.</p>' : `<table class="t leg"><tbody>
+          <tr><td>Encaissé</td><td class="num"><b>${E(a.encaisse)}</b></td></tr>
+          <tr><td class="vide">Soit en moyenne par mois</td><td class="num vide">${E(a.moyenne)}</td></tr>
+          <tr><td>Urssaf correspondante</td><td class="num">${E(a.urssaf)}</td></tr>
+          <tr><td>Impôt à avoir mis de côté</td><td class="num">${sansImpot ? TIRET : E(a.impot)}</td></tr>
+          <tr><td>Charges fixes (${a.nbMois} mois)</td><td class="num">${E(a.fixes)}</td></tr>
+          <tr><td><b>Ce qu’il reste</b></td><td class="num"><b>${E(a.net)}</b></td></tr>
+        </tbody></table>`}
+        ${sl.conges ? (() => { const ry = N.rythme(etat, auj()); return `<table class="t leg suite"><tbody>
+          <tr><td>Objectif par jour de consultation${sl.conges.jours ? ', ' + pluriel(sl.conges.jours, 'jour', 'jours') + ' de congés compris' : ''}</td><td class="num">${E(sl.conges.parJour)}</td></tr>
+          ${ry.jours ? `<tr><td class="vide">Moyenne réelle, douze derniers mois (${pluriel(ry.jours, 'jour', 'jours')})</td><td class="num vide">${E(ry.moyenne)}</td></tr>` : ''}
+          ${sl.conges.jours ? `<tr><td class="vide">Manque à gagner des congés sur l’année</td><td class="num vide">${E(sl.conges.manque)}</td></tr>` : ''}
+        </tbody></table>`; })() : ''}</section>
+      <section class="card"><h3>Détail de ${mois}</h3>
+        <table class="t leg"><tbody>
+          <tr><td>Rendez-vous du mois</td><td class="num">${pluriel(s.nbLignes, 'ligne', 'lignes')} · ${E(s.rendezVous)}</td></tr>
+          ${N.MODES.filter(m => s.parMode[m] > 0).map(m => `<tr><td>Encaissé : ${N.NOM_MODE[m].toLowerCase()}</td><td class="num">${E(s.parMode[m])}</td></tr>`).join('')}
+          ${prest.map(k => `<tr><td class="vide">${h(k)}</td><td class="num vide">${E(s.parPrestation[k])}</td></tr>`).join('')}
+        </tbody></table></section>
+    </div>
+    <div class="bloc"><h3>Mois par mois</h3>
+      <div class="tablewrap"><table class="t"><thead><tr><th>Mois</th><th class="num">Encaissé</th><th class="num">Urssaf</th><th class="num">Impôt</th><th class="num">Charges fixes</th><th class="num">Ce qu’il reste</th><th>Seuil de confort</th></tr></thead><tbody>
+      ${s.douze.slice().reverse().map(m => { const x = N.repartition(etat, m.encaisse); return `<tr><td class="nowrap">${h(N.nomMois(m.mois))}</td><td class="num"><b>${E(m.encaisse)}</b></td><td class="num">${E(x.urssaf)}</td><td class="num">${sansImpot ? TIRET : E(x.impot)}</td><td class="num">${E(x.fixes)}</td><td class="num">${E(x.net)}</td><td>${sl.confort ? (m.encaisse >= sl.confort ? pill('ok', 'Atteint') : pill('warn', 'Il manque ' + E(sl.confort - m.encaisse))) : TIRET}</td></tr>`; }).join('')}
+      </tbody></table></div>
+      <p class="pied">Les charges et les taux d’aujourd’hui sont appliqués à tous les mois.</p></div>`;
+  };
+  ACTIONS.synNav = el => { const m = N.ajouterMois(F.synMois, +el.dataset.d); if (m <= auj().slice(0, 7)) { F.synMois = m; rendre(); } };
+  ACTIONS.synMois = el => { F.synMois = el.dataset.m; rendre(); };
+  ACTIONS.voirImpayees = () => { F.filtre = 'impayees'; F.texte = ''; aller('encaissements'); };
+
+  // ====================================================================== 4. PARAMÈTRES
+  const ENTIERS = { conges: [0, N.JOURS_CONGES_MAX] };
+  const valeurParam = k => { const v = etat.params[k]; return v == null ? '' : k === 'revenuVise' ? N.saisie(v) : ENTIERS[k] ? String(v) : virgule(v); };
+  function htmlSeuils() {
+    const sl = N.seuils(etat), p = etat.params, suivi = N.par(etat.prestations, 'suivi') || etat.prestations[0];
+    if (sl.pointMort == null) return '<p class="avis">L’Urssaf et l’impôt réunis atteignent 100 % des encaissements : vérifiez ces deux taux.</p>';
+    return `<table class="t leg"><tbody>
+        <tr><td>Charges fixes</td><td class="num">${E(sl.fixes)}</td></tr>
+        <tr><td>Sur 100 € encaissés, il reste après l’Urssaf${p.impot == null ? '' : ' et l’impôt'}</td><td class="num">${virgule(Math.round(sl.garde * 1000) / 10)}\u00a0€</td></tr>
+        <tr><td><b>Point mort</b> : à encaisser chaque mois pour couvrir les charges</td><td class="num"><b>${E(sl.pointMort)}</b></td></tr>
+        <tr><td><b>Seuil de confort</b> : à encaisser chaque mois pour atteindre le revenu souhaité</td><td class="num"><b>${sl.confort == null ? '—' : E(sl.confort)}</b></td></tr>
+        ${sl.confort != null && suivi && suivi.tarif ? `<tr><td class="vide">Soit, à ${E(suivi.tarif)} la consultation</td><td class="num vide">${Math.ceil(sl.confort / suivi.tarif)} par mois</td></tr>` : ''}
+      </tbody></table>
+      <p class="note">Calcul : (charges fixes + revenu souhaité) ÷ part qui reste après l’Urssaf et l’impôt.${p.impot == null ? ' Le taux d’impôt n’est pas renseigné : les seuils sont calculés sans impôt.' : ''}${etat.demo && p.revenuVise === N.REVENU_EXEMPLE ? ' Le revenu de 2 000 € est un exemple, à remplacer.' : ''}</p>`;
+  }
+  // Les congés : objectif par jour de consultation, manque à gagner, et le rythme réel d'après le livre.
+  function htmlConges() {
+    const sl = N.seuils(etat), c = sl.conges, p = etat.params, suivi = N.par(etat.prestations, 'suivi') || etat.prestations[0], r = N.rythme(etat, auj());
+    if (!c) return p.conges ? '<p class="avis">Avec autant de jours de congés, il ne reste aucun jour de consultation : vérifiez les deux nombres.</p>' : '';
+    const nomVise = c.vise === 'confort' ? 'le seuil de confort' : 'le point mort', rdv = m => suivi && suivi.tarif ? ' (' + virgule(Math.round(m / suivi.tarif * 10) / 10) + ' consultations à ' + E(suivi.tarif) + ')' : '';
+    return `<table class="t leg"><tbody>
+        <tr><td>Jours de consultation dans l’année</td><td class="num">${virgule(c.joursSemaine)} × ${N.SEMAINES_AN} semaines${c.jours ? ' − ' + c.jours : ''} = ${virgule(c.travailles)}</td></tr>
+        <tr><td>Objectif de l’année (${nomVise} × 12)</td><td class="num">${E(c.annuel)}</td></tr>
+        <tr><td><b>Objectif par jour de consultation</b>${rdv(c.parJour)}</td><td class="num"><b>${E(c.parJour)}</b></td></tr>
+        ${c.jours ? `<tr><td class="vide">Sans congés, il suffirait de</td><td class="num vide">${E(c.parJourSansConges)}</td></tr>
+        <tr><td><b>Manque à gagner des congés</b> : ${pluriel(c.jours, 'jour', 'jours')} × ${E(c.parJour)}</td><td class="num"><b>${E(c.manque)}</b></td></tr>` : ''}
+      </tbody></table>
+      <p class="note">Les charges courent toute l’année, mais rien n’est encaissé pendant les congés : ce qui n’est pas gagné ces jours-là se rattrape sur les autres. Comptez dans les congés les jours fériés où le cabinet est fermé.${etat.demo && p.conges === N.CONGES_EXEMPLE ? ' Les 25 jours sont un exemple, à remplacer.' : ''}</p>
+      ${r.jours ? `<p class="note">D’après le livre, sur les douze derniers mois : ${pluriel(r.jours, 'jour de consultation', 'jours de consultation')}, ${E(r.moyenne)} de rendez-vous en moyenne par jour${c.jours ? ' ; à ce rythme, les congés représentent ' + E(c.jours * r.moyenne) : ''}${r.moyenne < c.parJour ? '. C’est ' + E(c.parJour - r.moyenne) + ' de moins par jour que l’objectif' : ''}.</p>` : ''}`;
+  }
+  function majSeuils() { $('#fix-total').textContent = E(N.totalFixes(etat)); $('#seuils-resultat').innerHTML = htmlSeuils(); $('#conges-resultat').innerHTML = htmlConges(); }
+
+  VUES.parametres = function () {
+    const p = etat.params, nb = {}, utilisees = {};
+    etat.lignes.forEach(l => { utilisees[l.prestationId] = 1; nb[l.patientId] = (nb[l.patientId] || 0) + 1; });
+    const patients = etat.patients.slice().sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    return `
+    <div class="titre"><div><h2>Paramètres</h2><p class="lead">Les patients, les charges, les seuils, les congés, les tarifs et le rappel de dépôt.</p></div></div>
+    <section class="card"><details id="det-patients"${ouvert('det-patients')}><summary><h3>Patients <span class="compte">${patients.length}</span></h3></summary>
+      <form data-f="patientAjout" novalidate class="row"><label for="pat-nouveau">Nouveau patient</label><input id="pat-nouveau" autocomplete="off" placeholder="Prénom Nom"><input type="email" id="pat-nouveau-email" autocomplete="off" placeholder="E-mail (facultatif)" aria-label="E-mail du nouveau patient"><button type="submit" class="btn">Ajouter</button></form>
+      <p class="erreur" id="pat-erreur" role="alert"></p>
+      <p class="note">Un patient se crée aussi tout seul : il suffit de taper un nouveau nom dans le formulaire d’ajout d’une ligne (Encaissements). Le nom corrigé ici vaut pour toutes les lignes du patient. L’e-mail sert aux relances.</p>
+      ${patients.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Nom</th><th>E-mail</th><th class="num">Lignes</th><th></th></tr></thead><tbody>
+      ${patients.map(x => `<tr><td><input id="pat-nom-${x.id}" value="${h(x.nom)}" data-c="patient" data-id="${x.id}" data-k="nom" autocomplete="off" aria-label="Nom"></td>
+        <td><input type="email" id="pat-email-${x.id}" value="${h(x.email)}" data-c="patientEmail" data-id="${x.id}" autocomplete="off" aria-label="E-mail de ${h(x.nom)}" placeholder="—"></td>
+        <td class="num">${nb[x.id] || 0}</td><td class="act">${nb[x.id] ? '' : bt('Retirer', 'patientRetirer', `data-id="${x.id}"`, 'link danger')}</td></tr>`).join('')}
+      </tbody></table></div>` : '<p class="videtxt">Aucun patient pour l’instant.</p>'}
+    </details></section>
+    <div class="colonnes">
+      <section class="card"><h3>Charges fixes, par mois</h3>
+        <div class="tablewrap"><table class="t"><tbody>
+          ${p.fixes.map(f => `<tr><td><input id="fix-libelle-${f.id}" value="${h(f.libelle)}" data-c="fixe" data-id="${f.id}" data-k="libelle" autocomplete="off" aria-label="Nom de la charge"></td><td class="etroit"><input id="fix-montant-${f.id}" value="${N.saisie(f.montant)}" inputmode="decimal" data-c="fixe" data-id="${f.id}" data-k="montant" autocomplete="off" aria-label="Montant par mois, en euros"></td><td class="act">${bt('Retirer', 'fixeRetirer', `data-id="${f.id}"`, 'link danger')}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td>Total par mois</td><td class="num" id="fix-total">${E(N.totalFixes(etat))}</td><td class="act">${bt('Ajouter une charge', 'fixeAjouter', '')}</td></tr></tfoot></table></div>
+        <p class="note">Une charge payée une fois par an (une assurance, une cotisation) se saisit divisée par douze.</p>
+        <h3 class="suite">Charges qui suivent les encaissements</h3>
+        <div class="champs large">
+          <label for="par-urssaf">Urssaf (% des encaissements)</label><input id="par-urssaf" value="${valeurParam('urssaf')}" inputmode="decimal" data-c="param" data-k="urssaf" autocomplete="off">
+          <label for="par-impot">Impôt à mettre de côté (%)</label><input id="par-impot" value="${valeurParam('impot')}" inputmode="decimal" data-c="param" data-k="impot" autocomplete="off" placeholder="À renseigner">
+        </div>
+        <details class="aide" id="det-impot"${ouvert('det-impot')}><summary>Comment choisir le taux d’impôt</summary>
+          <p class="note">En micro-entreprise, l’impôt porte sur 66 % des encaissements (abattement de ${N.ABATTEMENT_BNC} %). Deux façons d’estimer ce qu’il faut mettre de côté :</p>
+          <div class="champs large">
+            <label for="par-tranche">1. D’après la tranche d’imposition du foyer</label><select id="par-tranche" data-c="tranche"><option value="">Choisir la tranche…</option>${TRANCHES.map(t => `<option value="${t}">${t} % : mettre de côté ${taux(N.tauxImpotEstime(t))}</option>`).join('')}</select>
+            <label for="aide-regul">2. D’après la dernière régularisation payée (€)</label><input id="aide-regul" inputmode="decimal" autocomplete="off">
+            <label for="aide-recettes">et les encaissements de cette année-là (€)</label><input id="aide-recettes" inputmode="decimal" autocomplete="off">
+          </div>
+          <div class="row fin">${bt('Appliquer ce taux', 'aideRegul', '')}</div>
+          <p class="note">La première applique la tranche la plus haute du foyer à toute la part imposable : c’est une estimation large. La seconde ne couvre que le complément payé de septembre à décembre : elle convient quand un acompte est déjà prélevé chaque mois. À faire confirmer par l’expert-comptable.</p>
+        </details>
+      </section>
+      <section class="card"><h3>Seuil de confort</h3>
+        <div class="champs large">
+          <label for="par-revenu">Revenu net souhaité par mois (€)</label><input id="par-revenu" value="${valeurParam('revenuVise')}" inputmode="decimal" data-c="param" data-k="revenuVise" autocomplete="off" placeholder="À renseigner">
+        </div>
+        <div id="seuils-resultat">${htmlSeuils()}</div>
+        <h3 class="suite">Congés</h3>
+        <div class="champs large">
+          <label for="par-jours">Jours de consultation par semaine</label><input id="par-jours" value="${valeurParam('joursSemaine')}" inputmode="decimal" data-c="param" data-k="joursSemaine" autocomplete="off" placeholder="Par exemple 2,5">
+          <label for="par-conges">Jours de congés souhaités par an</label><input id="par-conges" value="${valeurParam('conges')}" inputmode="numeric" data-c="param" data-k="conges" autocomplete="off" placeholder="À renseigner">
+        </div>
+        <div id="conges-resultat">${htmlConges()}</div>
+      </section>
+    </div>
+    <section class="card"><h3>Prestations et tarifs</h3>
+      <div class="tablewrap"><table class="t"><thead><tr><th>Prestation</th><th>Tarif (€)</th><th>Dans un bilan</th><th></th></tr></thead><tbody>
+      ${etat.prestations.map(t => `<tr><td><input id="pre-libelle-${t.id}" value="${h(t.libelle)}" data-c="prestation" data-id="${t.id}" data-k="libelle" autocomplete="off" aria-label="Nom de la prestation"></td>
+        <td class="etroit"><input id="pre-tarif-${t.id}" value="${N.saisie(t.tarif)}" inputmode="decimal" data-c="prestation" data-id="${t.id}" data-k="tarif" autocomplete="off" aria-label="Tarif, en euros"></td>
+        <td><select id="pre-role-${t.id}" data-c="prestation" data-id="${t.id}" data-k="role" aria-label="Rôle dans un bilan"><option value="">—</option><option value="premier"${t.premier ? ' selected' : ''}>C’est le 1er rendez-vous de bilan</option><option value="inclut"${t.inclutPremier ? ' selected' : ''}>Le tarif comprend le 1er rendez-vous</option></select></td>
+        <td class="act">${utilisees[t.id] ? '' : bt('Retirer', 'prestationRetirer', `data-id="${t.id}"`, 'link danger')}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="row fin">${bt('Ajouter une prestation', 'prestationAjouter', '')}</div>
+      <p class="note">Quand le tarif d’un bilan comprend le 1er rendez-vous, la ligne du bilan propose le tarif moins ce 1er rendez-vous déjà compté. Changer un tarif ou un nom ne touche pas les lignes déjà saisies.</p></section>
+    <section class="card"><h3>Relance par mail</h3>
+      <div class="champs moyen">
+        <label for="mail-messagerie">Vos mails partent de</label><select id="mail-messagerie" data-c="mailReglage" data-k="messagerie">${N.MESSAGERIES.map(k => `<option value="${k}"${etat.mail.messagerie === k ? ' selected' : ''}>${NOM_MESSAGERIE[k]}</option>`).join('')}</select>
+        <label for="mail-objet">Objet</label><input id="mail-objet" value="${h(etat.mail.objet)}" data-c="mailReglage" data-k="objet" autocomplete="off">
+        <label for="mail-texte">Message</label><textarea id="mail-texte" class="haut" data-c="mailReglage" data-k="texte">${h(etat.mail.texte)}</textarea>
+      </div>
+      <p class="note">Les mots entre accolades sont remplacés pour chaque relance : {patient}, {montant} (le total dû), {details} (une ligne par rendez-vous impayé, avec sa date et la somme due). La prestation n’est jamais nommée : un mail s’affiche parfois sur un écran verrouillé. La signature de votre messagerie s’ajoute d’elle-même.</p>
+      <div class="row">${bt('Rétablir le message d’origine', 'relanceOrigine', '', 'link')}</div></section>
+    <section class="card"><h3>Rappel de dépôt en banque</h3>
+      <p class="note">Les trois derniers jours du mois, un bandeau rappelle les chèques et les espèces à déposer ; il revient chaque jour tant qu’un paiement d’un mois passé n’est pas déposé. Le bouton « Déposer en banque » est vert jusqu’à 400 €, jaune jusqu’à 800 €, rouge au-delà.</p>
+      <p class="note">Pour être prévenue même quand l’outil est fermé : ajoutez le rappel au calendrier du Mac. Ouvrez le fichier téléchargé, puis acceptez l’ajout. Le rappel tombe le dernier jour de chaque mois à 17 h, avec une alerte deux jours avant et une le matin même.</p>
+      <div class="row">${bt('Ajouter le rappel à mon calendrier', 'rappelIcs', '')}</div></section>
+    ${PROD ? htmlDonneesProd() : `<section class="card"><h3>Données</h3>
+      <div class="row"><button type="button" class="btn" data-a="sauvegarde">Exporter une sauvegarde</button>
+        <label class="btn" for="reg-fichier">Restaurer une sauvegarde</label><input type="file" id="reg-fichier" accept=".json,application/json" hidden data-c="restaurer">
+        <button type="button" class="btn" data-a="demo">Recharger les patients fictifs</button><button type="button" class="btn danger" data-a="vider">Vider le livre</button></div>
+      <p class="note">Dans ce prototype, les données restent dans la mémoire de ce navigateur, sans chiffrement. « Vider le livre » efface les patients et les lignes, et garde les paramètres.</p>
+      ${donneesEcartees() ? `<p class="avis suite">Des données enregistrées auparavant n’ont pas pu être relues par cette version : elles sont mises de côté, rien n’est perdu.</p>
+        <div class="row">${bt('Télécharger ces données', 'ecartTelecharger', '')}${bt('Les effacer', 'ecartEffacer', '', 'link danger')}</div>` : ''}</section>`}`;
+  };
+  CHANGES.param = el => {
+    const k = el.dataset.k, vide = !el.value.trim(), b = ENTIERS[k], t = el.value.trim();
+    const v = b ? (/^\d+$/.test(t) && +t >= b[0] && +t <= b[1] ? +t : null) : k === 'joursSemaine' ? N.versJours(el.value) : k === 'revenuVise' ? N.versCentimes(el.value) : N.versTaux(el.value);
+    if (v === null && (k === 'urssaf' || k === 'joursSemaine' || !vide)) toast(b ? 'Nombre non reconnu : écrivez un nombre entier de ' + b[0] + ' à ' + b[1] + '.' : k === 'joursSemaine' ? 'Nombre non reconnu : écrivez de 0,5 à 7 jours, par exemple 2,5.' : k === 'revenuVise' ? 'Montant non reconnu : écrivez par exemple 2000.' : 'Taux non reconnu : écrivez par exemple 23,4.', 'bad');
+    else { etat.params[k] = v; noter(); majSeuils(); }
+    el.value = valeurParam(k);
+  };
+  function reglerImpot(t, origine) {
+    etat.params.impot = t; noter();
+    $('#par-impot').value = valeurParam('impot'); $('#par-tranche').value = ''; majSeuils();
+    toast('Impôt à mettre de côté : ' + taux(t) + ' des encaissements (' + origine + ').');
+  }
+  CHANGES.tranche = el => { if (el.value !== '') reglerImpot(N.tauxImpotEstime(+el.value), 'tranche à ' + el.value + ' %'); };
+  ACTIONS.aideRegul = () => {
+    const r = N.versCentimes($('#aide-regul').value), c = N.versCentimes($('#aide-recettes').value), t = r !== null && c ? N.tauxDepuisRegularisation(r, c) : null;
+    if (t === null || t >= 100) return toast('Indiquez les deux montants, par exemple 1800 et 36000.', 'bad');
+    reglerImpot(t, 'd’après la dernière régularisation');
+  };
+  CHANGES.fixe = el => {
+    const f = N.par(etat.params.fixes, el.dataset.id);
+    if (!f) return;
+    if (el.dataset.k === 'montant') {
+      const m = N.versCentimes(el.value);
+      if (m === null) toast('Montant non reconnu : écrivez par exemple 280.', 'bad'); else { f.montant = m; noter(); majSeuils(); }
+      el.value = N.saisie(f.montant);
+    } else { if (el.value.trim()) { f.libelle = el.value.trim(); noter(); } el.value = f.libelle; }
+  };
+  ACTIONS.fixeAjouter = () => { let id; muter(() => { id = 'c' + (++etat.compteurs.id); etat.params.fixes.push({ id: id, libelle: 'Nouvelle charge', montant: 0 }); }); rendre(); const z = $('#fix-libelle-' + id); if (z) { z.focus(); z.select(); } };
+  ACTIONS.fixeRetirer = el => {
+    const f = N.par(etat.params.fixes, el.dataset.id);
+    if (!f) return;
+    muter(() => { etat.params.fixes = etat.params.fixes.filter(x => x.id !== f.id); }); rendre();
+    toast('Charge « ' + f.libelle + ' » retirée (' + E(f.montant) + ' par mois).');
+  };
+  CHANGES.prestation = el => {
+    const t = N.par(etat.prestations, el.dataset.id), k = el.dataset.k;
+    if (!t) return;
+    if (k === 'tarif') {
+      const m = N.versCentimes(el.value);
+      if (m === null) toast('Tarif non reconnu : écrivez par exemple 80.', 'bad'); else { t.tarif = m; noter(); majSeuils(); }
+      el.value = N.saisie(t.tarif);
+    } else if (k === 'role') { t.premier = el.value === 'premier'; t.inclutPremier = el.value === 'inclut'; noter(); }
+    else { if (el.value.trim()) { t.libelle = el.value.trim(); noter(); } el.value = t.libelle; }
+  };
+  ACTIONS.prestationAjouter = () => { let id; muter(() => { id = 't' + (++etat.compteurs.id); etat.prestations.push({ id: id, libelle: 'Nouvelle prestation', tarif: 0, premier: false, inclutPremier: false }); }); rendre(); const z = $('#pre-libelle-' + id); if (z) { z.focus(); z.select(); } };
+  ACTIONS.prestationRetirer = el => {
+    const t = N.par(etat.prestations, el.dataset.id);
+    if (!t) return;
+    muter(() => { etat.prestations = etat.prestations.filter(x => x.id !== t.id); }); rendre();
+    toast('Prestation « ' + t.libelle + ' » retirée.');
+  };
+  CHANGES.patientEmail = el => {
+    const p = patient(el.dataset.id);
+    if (!p) return;
+    try { N.changerEmail(etat, p.id, el.value); noter(); } catch (x) { toast(x.message, 'bad'); }
+    el.value = p.email;
+  };
+  CHANGES.mailReglage = el => {
+    const k = el.dataset.k;
+    if (k === 'messagerie' && N.MESSAGERIES.indexOf(el.value) < 0) return;
+    etat.mail[k] = k === 'messagerie' ? el.value : el.value.trim(); noter();
+  };
+  ACTIONS.relanceOrigine = () => {
+    etat.mail.objet = N.RELANCE_OBJET; etat.mail.texte = N.RELANCE_TEXTE; noter();
+    $('#mail-objet').value = N.RELANCE_OBJET; $('#mail-texte').value = N.RELANCE_TEXTE;
+    toast('Message de relance d’origine rétabli.');
+  };
+  ACTIONS.patientRetirer = el => { if (muter(() => { N.supprimerPatient(etat, el.dataset.id); })) rendre(); };
+  FORMS.patientAjout = function () {
+    const champ = $('#pat-nouveau');
+    erreur('', '#pat-erreur');
+    const p = muter(() => N.ajouterPatient(etat, champ.value, $('#pat-nouveau-email').value), '#pat-erreur');
+    if (!p) return;
+    F.ouverts['det-patients'] = true; rendre();
+    toast('« ' + p.nom + ' » ajouté à la liste des patients.');
+    $('#pat-nouveau').focus();
+  };
+  ACTIONS.rappelIcs = () => telecharger('rappel-depot-fin-de-mois.ics', N.rappelCalendrier(auj()), 'text/calendar');
+  ACTIONS.sauvegarde = async () => {
+    if (!PROD) return telecharger('suivi-paiements-sauvegarde-' + auj() + '.json', JSON.stringify(etat, null, 1), 'application/json');
+    const env = await N.chiffrer(cle, JSON.stringify(etat));
+    if (await telecharger('suivi-paiements-sauvegarde-' + auj() + '.json', JSON.stringify(env), 'application/json')) {
+      try { localStorage.setItem(CLE_SAUVE, auj()); } catch (x) { /* rappel seulement */ }
+      toast('Sauvegarde chiffrée enregistrée. Elle s’ouvre avec le mot de passe actuel.'); rendre();
+    }
+  };
+  CHANGES.restaurer = el => {
+    const f = el.files && el.files[0];
+    if (!f) return;
+    const l = new FileReader();
+    l.onload = () => {
+      el.value = '';
+      if (PROD) return restaurerProd(String(l.result), false);
+      const o = lireEtat(String(l.result));
+      if (!o) return toast('Ce fichier n’est pas une sauvegarde complète de cet outil : rien n’a été modifié.', 'bad');
+      confirmer('Restaurer cette sauvegarde ?', 'Elle remplacera tout ce qui est affiché. Le fichier contient ' + pluriel(o.lignes.length, 'ligne', 'lignes') + ' et ' + pluriel(o.patients.length, 'patient', 'patients') + '.', 'Restaurer', () => { etat = o; sauver(); return true; }, { apres: () => toast('Sauvegarde restaurée : ' + pluriel(o.lignes.length, 'ligne', 'lignes') + '.') });
+    };
+    l.onerror = () => toast('Le fichier n’a pas pu être lu.', 'bad');
+    l.readAsText(f);
+  };
+  ACTIONS.demo = () => confirmer('Recharger les patients fictifs ?', 'Le livre affiché sera remplacé par le jeu d’exemple du jour, et les prestations reviennent à celles du cabinet. Les charges, les taux et le revenu souhaité sont conservés.', 'Recharger', () => {
+    const neuf = N.donneesDemo(auj());
+    neuf.params = etat.params; neuf.compteurs.id = Math.max(neuf.compteurs.id, etat.compteurs.id);
+    etat = neuf; F.mois = F.synMois = auj().slice(0, 7); sauver();
+    return true;
+  });
+  ACTIONS.ecartTelecharger = () => telecharger('suivi-paiements-donnees-mises-de-cote.json', donneesEcartees() || '', 'application/json');
+  ACTIONS.ecartEffacer = () => confirmer('Effacer les données mises de côté ?', 'Elles ne pourront plus être récupérées. Téléchargez-les d’abord si elles peuvent encore servir.', 'Effacer', () => { try { localStorage.removeItem(CLE_ECART); } catch (x) { /* mémoire indisponible */ } return true; }, { danger: true });
+  ACTIONS.vider = () => confirmer('Vider le livre ?', 'Les patients et toutes les lignes seront effacés. Les paramètres (charges, seuils, tarifs) sont conservés.', 'Vider le livre', () => {
+    const neuf = N.etatVide();
+    neuf.params = etat.params; neuf.prestations = etat.prestations; neuf.compteurs.id = etat.compteurs.id;
+    if (etat.demo && neuf.params.revenuVise === N.REVENU_EXEMPLE) neuf.params.revenuVise = null;   // l'exemple ne devient pas un vrai réglage
+    if (etat.demo && neuf.params.conges === N.CONGES_EXEMPLE) neuf.params.conges = null;
+    etat = neuf; sauver();
+    return true;
+  }, { danger: true });
+
+  // ====================================================================== 5. MES NOTES
+  // Une idée, un bug, une question sur l'outil : noté ici, envoyé à Hugo sous forme de fichier texte.
+  const ECRANS_NOTE = ['Général', 'Encaissements', 'Synthèse', 'Paramètres'];
+  const COULEUR_NOTE = { idee: 'ok', bug: 'bad', question: 'warn' };
+  const horo = ms => { const d = new Date(ms); return jourMois(N.iso(d)) + ' à ' + N.pad(d.getHours()) + ' h ' + N.pad(d.getMinutes()); };
+  const choixType = (nom, sel, change) => `<div class="modes" role="radiogroup" aria-label="Type de note">${Object.keys(N.NOTE_TYPES).map(k => `<label><input type="radio" name="${nom}" value="${k}"${k === sel ? ' checked' : ''}${change ? ' data-c="noteType"' : ''}>${N.NOTE_TYPES[k]}</label>`).join('')}</div>`;
+  const choixEcran = (id, sel, change) => `<select id="${id}"${change ? ' data-c="noteEcran"' : ''} aria-label="Écran concerné">${ECRANS_NOTE.map(x => `<option${x === sel ? ' selected' : ''}>${h(x)}</option>`).join('')}</select>`;
+  VUES.notes = function () {
+    const toutes = carnet.notes.slice().reverse(), ouv = toutes.filter(n => !n.faite), faites = toutes.filter(n => n.faite);
+    const carte = n => `<div class="note-carte${n.faite ? ' faite' : ''}"><div class="note-tete">${pill(COULEUR_NOTE[n.type], N.NOTE_TYPES[n.type])}<span class="vide">${h(horo(n.cree))}${n.ecran ? ' · ' + h(n.ecran) : ''}</span></div>
+      <p class="note-texte">${multiligne(n.texte)}</p>
+      <div class="row">${n.faite ? '' : bt('Modifier', 'noteModifier', `data-id="${n.id}"`, 'link')}${bt(n.faite ? 'Rouvrir' : 'Marquer comme réglée', 'noteBasculer', `data-id="${n.id}"`, 'link')}${bt('Supprimer', 'noteSupprimer', `data-id="${n.id}"`, 'link danger')}</div></div>`;
+    return `
+    <div class="titre"><div><h2>Mes notes</h2><p class="lead">Une idée, un bug, une question sur l’outil : notez-la ici au moment où elle vient, puis envoyez le fichier des notes à Hugo.</p></div></div>
+    <section class="card"><h3>Nouvelle note</h3>
+      <form data-f="noteAjout" novalidate>
+        ${choixType('note-type', F.noteType, true)}
+        <div class="champs moyen suite"><label for="note-ecran">Écran concerné</label>${choixEcran('note-ecran', F.noteEcran, true)}
+          <label for="note-texte">La note</label><textarea id="note-texte" class="haut" data-garde placeholder="Ce qui manque, ce qui gêne, ce qui pourrait être mieux…"></textarea></div>
+        <p class="note">Pas de nom de patient dans les notes : elles sont faites pour être envoyées. Décrivez la situation (« une ligne de bilan payée en deux fois ») plutôt que la personne.</p>
+        <p class="erreur" id="note-erreur" role="alert"></p>
+        <div class="row fin"><button type="submit" class="btn pri">Ajouter la note</button></div>
+      </form></section>
+    <section class="card"><div class="titre-carte"><h3>À traiter <span class="compte">${ouv.length}</span></h3>
+        <div class="row">${bt('Enregistrer le fichier des notes', 'notesFichier', toutes.length ? '' : 'disabled')}${bt('Copier le texte', 'notesCopier', toutes.length ? '' : 'disabled', 'link')}</div></div>
+      ${ouv.map(carte).join('') || '<p class="videtxt">Aucune note en attente.</p>'}</section>
+    ${faites.length ? `<section class="card"><details id="det-faites"${ouvert('det-faites')}><summary><h3>Réglées <span class="compte">${faites.length}</span></h3></summary>${faites.map(carte).join('')}</details></section>` : ''}
+    <p class="pied">Les notes restent dans ce navigateur, à part du livre : vider, restaurer ou recharger le livre ne les efface pas. Une fois la correction faite, marquez la note comme réglée.</p>`;
+  };
+  ACTIONS.notes = () => {
+    if (vue.nom !== 'notes') F.noteEcran = { encaissements: 'Encaissements', synthese: 'Synthèse', parametres: 'Paramètres' }[vue.nom] || 'Général';
+    aller('notes');
+    const t = $('#note-texte'); if (t) t.focus();
+  };
+  CHANGES.noteType = el => { F.noteType = el.value; };
+  CHANGES.noteEcran = el => { F.noteEcran = el.value; };
+  // Enregistre une note, après avoir prévenu si elle semble contenir une donnée de patient (nom du livre, e-mail, téléphone).
+  function enregistrerNote(fn, texte, zone, message, retour, vider) {
+    const faire = () => {
+      const avant = JSON.stringify(carnet);
+      try { fn(); } catch (x) { carnet = N.relireNotes(JSON.parse(avant)); erreur(x && x.message ? x.message : String(x), zone); return false; }
+      if (vider) { const t = $('#note-texte'); if (t) t.value = ''; }
+      sauverNotes(); toast(message);
+      return true;
+    };
+    if (!texte.trim()) return erreur('Écrivez la note avant de l’enregistrer.', zone);
+    const d = N.donneesDansNote(etat, texte);
+    if (!d.length) { if (faire()) { fermer(); rendre({ vierge: vider }); } return; }
+    const liste = d.length === 1 ? d[0] : d.slice(0, -1).join(', ') + ' et ' + d[d.length - 1];
+    confirmer('Une donnée de patient dans la note ?', 'Cette note semble contenir : ' + liste + '. Les notes sont faites pour être envoyées : retirez tout ce qui permettrait de reconnaître un patient.', 'Enregistrer quand même', faire, { prudent: true, non: 'Corriger la note', retour: retour });
+  }
+  FORMS.noteAjout = () => {
+    const texte = $('#note-texte').value, c = $('input[name="note-type"]:checked');
+    enregistrerNote(() => N.ajouterNote(carnet, { type: c ? c.value : 'idee', ecran: $('#note-ecran').value, texte: texte }, Date.now()), texte, '#note-erreur', 'Note ajoutée.', null, true);
+  };
+  function dlgNote(id, b) {
+    const n = carnet.notes.find(x => x.id === id);
+    if (!n) return;
+    b = b || n;
+    ouvrir(`<h3>Modifier la note</h3><form data-f="noteModif" data-id="${n.id}" novalidate>
+      ${choixType('note-type-m', b.type)}
+      <div class="champs moyen suite"><label for="note-texte-m">La note</label><textarea id="note-texte-m" class="haut" autofocus>${h(b.texte)}</textarea></div>
+      <p class="erreur" id="dlg-erreur" role="alert"></p>
+      <div class="row fin"><button type="button" class="btn" data-a="fermer">Annuler</button><button type="submit" class="btn pri">Enregistrer</button></div></form>`);
+  }
+  FORMS.noteModif = f => {
+    const id = f.dataset.id, texte = $('#note-texte-m', dlg).value, c = $('input[name="note-type-m"]:checked', dlg), type = c ? c.value : 'idee';
+    enregistrerNote(() => N.modifierNote(carnet, id, { type: type, texte: texte }, Date.now()), texte, null, 'Note modifiée.', () => dlgNote(id, { type: type, texte: texte }), false);
+  };
+  ACTIONS.noteModifier = el => dlgNote(el.dataset.id);
+  ACTIONS.noteBasculer = el => {
+    try { const n = N.basculerNote(carnet, el.dataset.id, Date.now()); sauverNotes(); rendre(); toast(n.faite ? 'Note marquée comme réglée.' : 'Note rouverte.'); } catch (x) { erreur(x.message); }
+  };
+  ACTIONS.noteSupprimer = el => confirmer('Supprimer cette note ?', 'Elle disparaîtra aussi du fichier des notes. Une note traitée peut plutôt être marquée comme réglée.', 'Supprimer', () => {
+    try { N.supprimerNote(carnet, el.dataset.id); } catch (x) { erreur(x.message); return false; }
+    sauverNotes(); return true;
+  }, { danger: true });
+  ACTIONS.notesFichier = () => telecharger('suivi-paiements-notes-' + auj() + '.txt', N.texteNotes(carnet, Date.now()), 'text/plain').then(ok => { if (ok && !ENCADRE) toast('Fichier des notes enregistré dans les téléchargements : envoyez-le à Hugo.'); });
+  ACTIONS.notesCopier = () => {
+    const t = N.texteNotes(carnet, Date.now());
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(() => toast('Notes copiées : collez-les dans un mail à Hugo.'), () => toast('Copie impossible : utilisez « Enregistrer le fichier des notes ».', 'bad'));
+    else toast('Copie impossible : utilisez « Enregistrer le fichier des notes ».', 'bad');
+  };
+
+  // ====================================================================== VERSION EN LIGNE : mot de passe, verrou, sauvegardes
+  function rendreVerrou() {
+    fermerMenuCol();
+    $('#onglets').innerHTML = ''; $('#btn-notes').hidden = true; $('#btn-verrou').hidden = true; majBadge();
+    page.className = 'vue-verrou';
+    const existe = !!enveloppeGardee();
+    page.innerHTML = `<div class="verrou"><section class="card">
+      <h2>Suivi des paiements</h2>
+      ${existe ? `<p class="lead">Le livre est chiffré sur cet appareil. Entrez votre mot de passe pour l’ouvrir.</p>
+        <form data-f="mdpOuvrir" novalidate class="champs-verrou"><input type="text" autocomplete="username" value="Suivi des paiements" hidden aria-hidden="true" tabindex="-1">
+          <label for="mdp">Mot de passe</label><input type="password" id="mdp" autocomplete="current-password" autofocus>
+          <p class="erreur" id="mdp-erreur" role="alert"></p>
+          <button type="submit" class="btn pri">Ouvrir le livre</button></form>
+        <details class="aide"><summary>Mot de passe oublié ?</summary>
+          <p class="note">Il n’est gardé nulle part et ne peut pas être retrouvé. Deux possibilités : restaurer une sauvegarde (elle s’ouvre avec le mot de passe qu’avait le livre le jour de la sauvegarde), ou effacer le livre de cet appareil et repartir de zéro.</p>
+          <div class="row"><label class="btn" for="ver-fichier">Restaurer une sauvegarde</label><input type="file" id="ver-fichier" accept=".json,application/json" hidden data-c="restaurerVerrou">${bt('Effacer le livre de cet appareil', 'livreEffacer', '', 'danger')}</div></details>`
+      : `<p class="lead">Première ouverture sur cet appareil : choisissez un mot de passe. Il chiffre le livre sur l’appareil et n’est gardé nulle part.</p>
+        <form data-f="mdpCreer" novalidate class="champs-verrou"><input type="text" autocomplete="username" value="Suivi des paiements" hidden aria-hidden="true" tabindex="-1">
+          <label for="mdp1">Mot de passe (au moins ${N.MDP_MIN} caractères)</label><input type="password" id="mdp1" autocomplete="new-password" autofocus>
+          <label for="mdp2">Le même, une seconde fois</label><input type="password" id="mdp2" autocomplete="new-password">
+          <label class="coche"><input type="checkbox" id="mdp-compris"><span class="txt">J’ai compris : sans ce mot de passe, le livre ne peut plus être ouvert. Je le note en lieu sûr et je fais des sauvegardes.</span></label>
+          <p class="erreur" id="mdp-erreur" role="alert"></p>
+          <button type="submit" class="btn pri">Créer le livre</button></form>
+        <p class="note">Le livre vient d’un autre appareil ? <label class="lien-btn" for="ver-fichier">Restaurer une sauvegarde</label><input type="file" id="ver-fichier" accept=".json,application/json" hidden data-c="restaurerVerrou"> : le livre gardera le mot de passe de la sauvegarde.</p>`}
+    </section></div>`;
+  }
+  function ouvrirLivre(o, c) {
+    etat = o; cle = c; verrouille = false; prevenu = false;
+    const j = auj(); F.jour = j; F.mois = F.synMois = j.slice(0, 7);
+    derniereActivite = Date.now();
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (x) { /* demande facultative */ }
+    vue = lire(location.hash.slice(1)); rendre(); window.scrollTo(0, 0);
+  }
+  function verrouiller(pourquoi) {
+    if (!PROD || verrouille) return;
+    fermer(); etat = null; cle = null; verrouille = true; rendre();
+    if (pourquoi) toast(pourquoi);
+  }
+  const occupe = (f, oui) => { const b = $('button[type=submit]', f); if (b) { b.disabled = oui; if (oui) { b.dataset.txt = b.textContent; b.textContent = 'Un instant…'; } else if (b.dataset.txt) b.textContent = b.dataset.txt; } };
+  FORMS.mdpOuvrir = async f => {
+    const env = enveloppeGardee();
+    if (!env) return rendre();
+    occupe(f, true);
+    try {
+      const r = await N.dechiffrer(env, $('#mdp').value), o = lireEtat(r.texte);
+      if (!o) throw new Error('Le livre s’ouvre, mais cette version ne sait pas le relire. Rien n’a été modifié : prévenez Hugo.');
+      ouvrirLivre(o, r.cle);
+    } catch (x) { occupe(f, false); erreur(x.message, '#mdp-erreur'); const m = $('#mdp'); if (m) { m.select(); m.focus(); } }
+  };
+  FORMS.mdpCreer = async f => {
+    const a = $('#mdp1').value, b = $('#mdp2').value;
+    try {
+      N.mdpValide(a);
+      if (a !== b) throw new Error('Les deux mots de passe ne sont pas identiques.');
+      if (!$('#mdp-compris').checked) throw new Error('Cochez la case pour confirmer que vous avez compris.');
+    } catch (x) { return erreur(x.message, '#mdp-erreur'); }
+    occupe(f, true);
+    try {
+      const c = await N.nouvelleCle(a), e = N.reglagesCabinet(N.etatVide());
+      ouvrirLivre(e, c); persister();
+      toast('Livre créé et chiffré sur cet appareil. Pensez à faire une première sauvegarde après quelques saisies.');
+    } catch (x) { occupe(f, false); erreur(x.message, '#mdp-erreur'); }
+  };
+  // Demande le mot de passe d'un fichier (sauvegarde), dans une fenêtre ; fn(mdp) rend une promesse, son erreur s'affiche dans la fenêtre.
+  function demanderMdp(titre, texte, fn) {
+    ouvrir(`<h3>${h(titre)}</h3><p>${h(texte)}</p><form data-f="mdpFenetre" novalidate><div class="champs-verrou"><input type="text" autocomplete="username" value="Suivi des paiements" hidden aria-hidden="true" tabindex="-1"><label for="mdp-f">Mot de passe</label><input type="password" id="mdp-f" autocomplete="current-password" autofocus></div>
+      <p class="erreur" id="dlg-erreur" role="alert"></p><div class="row fin"><button type="button" class="btn" data-a="fermer">Annuler</button><button type="submit" class="btn pri">Valider</button></div></form>`);
+    F.mdpFn = fn;
+  }
+  FORMS.mdpFenetre = async f => {
+    occupe(f, true);
+    try { await F.mdpFn($('#mdp-f', dlg).value); } catch (x) { occupe(f, false); erreur(x.message); const m = $('#mdp-f', dlg); if (m) { m.select(); m.focus(); } }
+  };
+  // Restaurer : depuis l'écran verrouillé (le livre prend le mot de passe de la sauvegarde) ou depuis les paramètres (il garde le mot de passe actuel).
+  function restaurerProd(texte, depuisVerrou) {
+    let o = null;
+    try { o = JSON.parse(texte); } catch (x) { o = null; }
+    if (!N.estEnveloppe(o)) {
+      const clair = o && N.relire(o);
+      if (!clair || depuisVerrou) return toast('Ce fichier n’est pas une sauvegarde chiffrée de cet outil : rien n’a été modifié.', 'bad');
+      return confirmer('Restaurer cette sauvegarde non chiffrée ?', 'Elle remplacera tout le livre (' + pluriel(clair.lignes.length, 'ligne', 'lignes') + '). Elle sera chiffrée ici avec le mot de passe actuel.', 'Restaurer', () => { etat = clair; persister(); return true; }, { danger: true });
+    }
+    demanderMdp('Ouvrir la sauvegarde', 'Mot de passe que le livre avait le jour de cette sauvegarde.', async mdp => {
+      const r = await N.dechiffrer(o, mdp), livre = lireEtat(r.texte);
+      if (!livre) throw new Error('La sauvegarde s’ouvre, mais cette version ne sait pas la relire.');
+      if (depuisVerrou) { fermer(); ouvrirLivre(livre, r.cle); persister(); toast('Sauvegarde restaurée : ' + pluriel(livre.lignes.length, 'ligne', 'lignes') + '. Le livre garde le mot de passe de la sauvegarde.'); return; }
+      confirmer('Restaurer cette sauvegarde ?', 'Elle remplacera tout le livre affiché. Elle contient ' + pluriel(livre.lignes.length, 'ligne', 'lignes') + ' et ' + pluriel(livre.patients.length, 'patient', 'patients') + '. Le mot de passe actuel est gardé.', 'Restaurer', () => { etat = livre; persister(); return true; }, { danger: true, apres: () => toast('Sauvegarde restaurée.') });
+    });
+  }
+  CHANGES.restaurerVerrou = el => {
+    const f = el.files && el.files[0]; if (!f) return;
+    const l = new FileReader();
+    l.onload = () => { el.value = ''; restaurerProd(String(l.result), true); };
+    l.onerror = () => toast('Le fichier n’a pas pu être lu.', 'bad');
+    l.readAsText(f);
+  };
+  ACTIONS.livreEffacer = () => confirmer('Effacer le livre de cet appareil ?', 'Sans le mot de passe, le livre chiffré est perdu. Seules les sauvegardes permettront de le retrouver. Les notes d’amélioration sont gardées.', 'Effacer le livre', () => {
+    try { localStorage.removeItem(CLE); localStorage.removeItem(CLE_SAUVE); } catch (x) { /* rien à effacer */ }
+    return true;
+  }, { danger: true, apres: () => toast('Livre effacé de cet appareil. Choisissez un mot de passe pour en créer un nouveau.') });
+  ACTIONS.verrouiller = () => verrouiller('Livre verrouillé.');
+  ACTIONS.mdpChanger = () => {
+    ouvrir(`<h3>Changer le mot de passe</h3><form data-f="mdpChanger" novalidate><div class="champs-verrou"><input type="text" autocomplete="username" value="Suivi des paiements" hidden aria-hidden="true" tabindex="-1">
+      <label for="mdp-ancien">Mot de passe actuel</label><input type="password" id="mdp-ancien" autocomplete="current-password" autofocus>
+      <label for="mdp-n1">Nouveau mot de passe (au moins ${N.MDP_MIN} caractères)</label><input type="password" id="mdp-n1" autocomplete="new-password">
+      <label for="mdp-n2">Le nouveau, une seconde fois</label><input type="password" id="mdp-n2" autocomplete="new-password"></div>
+      <p class="note">Les sauvegardes déjà faites gardent l’ancien mot de passe. Faites une nouvelle sauvegarde ensuite.</p>
+      <p class="erreur" id="dlg-erreur" role="alert"></p><div class="row fin"><button type="button" class="btn" data-a="fermer">Annuler</button><button type="submit" class="btn pri">Changer</button></div></form>`);
+  };
+  FORMS.mdpChanger = async f => {
+    const a = $('#mdp-n1', dlg).value, b = $('#mdp-n2', dlg).value;
+    try { N.mdpValide(a); if (a !== b) throw new Error('Les deux nouveaux mots de passe ne sont pas identiques.'); } catch (x) { return erreur(x.message); }
+    occupe(f, true);
+    try {
+      await ecritures;
+      await N.dechiffrer(enveloppeGardee(), $('#mdp-ancien', dlg).value);   // vérifie l'actuel
+      cle = await N.nouvelleCle(a); persister(); await ecritures;
+      fermer(); toast('Mot de passe changé. Faites une nouvelle sauvegarde : les anciennes gardent l’ancien mot de passe.');
+    } catch (x) { occupe(f, false); erreur(x.message === 'Mot de passe incorrect.' ? 'Le mot de passe actuel est incorrect.' : x.message); }
+  };
+  function htmlRappelSauvegarde() {
+    const d = derniereSauvegarde(), j = d ? N.ecartJours(d, auj()) : null;
+    if (!etat.lignes.length || (d && j < JOURS_SANS_SAUVEGARDE)) return '';
+    return `<div class="rappel sauve" role="status"><span class="txt"><b>${d ? 'Dernière sauvegarde il y a ' + pluriel(j, 'jour', 'jours') + '.' : 'Aucune sauvegarde pour l’instant.'}</b> Le livre n’existe que sur cet appareil : une sauvegarde chiffrée le protège d’une perte ou d’une panne.</span>
+      <span class="row">${bt('Faire une sauvegarde', 'sauvegarde', '', 'pri')}</span></div>`;
+  }
+  function htmlDonneesProd() {
+    const d = derniereSauvegarde();
+    return `<section class="card"><h3>Données et mot de passe</h3>
+      <p class="note">Le livre est chiffré sur cet appareil avec votre mot de passe (AES 256 bits) ; rien ne part sur Internet. Il se verrouille seul après ${VERROU_ARRIERE_PLAN / 60000} minutes en arrière-plan ou ${VERROU_INACTIVITE / 60000} minutes sans utilisation.</p>
+      <p class="note">Dernière sauvegarde : <b>${d ? h(N.dateFr(d)) : 'aucune'}</b>. Une sauvegarde est un fichier chiffré avec le mot de passe du moment : gardez-la dans Fichiers ou iCloud Drive, ou envoyez-la sur le Mac pour y ouvrir le livre.</p>
+      <div class="row"><button type="button" class="btn pri" data-a="sauvegarde">Faire une sauvegarde</button>
+        <label class="btn" for="reg-fichier">Restaurer une sauvegarde</label><input type="file" id="reg-fichier" accept=".json,application/json" hidden data-c="restaurer">
+        <button type="button" class="btn" data-a="mdpChanger">Changer le mot de passe</button>
+        <button type="button" class="btn danger" data-a="vider">Vider le livre</button></div></section>`;
+  }
+  // Verrou automatique : après un moment en arrière-plan, ou sans utilisation.
+  ['pointerdown', 'keydown', 'input'].forEach(t => document.addEventListener(t, () => { derniereActivite = Date.now(); }, true));
+  document.addEventListener('visibilitychange', () => {
+    if (!PROD) return;
+    if (document.hidden) cacheLe = Date.now();
+    else if (!verrouille && cacheLe && Date.now() - cacheLe > VERROU_ARRIERE_PLAN) verrouiller('Livre verrouillé après un moment en arrière-plan.');
+  });
+  if (PROD) setInterval(() => { if (!verrouille && Date.now() - derniereActivite > VERROU_INACTIVITE) verrouiller('Livre verrouillé après ' + VERROU_INACTIVITE / 60000 + ' minutes sans utilisation.'); }, 30000);
+
+  // ====================================================================== événements
+  ACTIONS.aller = el => aller(el.dataset.vue);
+  ACTIONS.fermer = () => fermer();
+  ACTIONS.oui = () => { const s = suite; if (!s || !s.fn()) return; fermer(); rendre(); if (s.apres) s.apres(); };
+  ACTIONS.non = () => { const s = suite; fermer(); if (s && s.retour) s.retour(); };
+
+  const horsFenetre = ev => { const b = dlg.getBoundingClientRect(); return ev.clientX < b.left || ev.clientX > b.right || ev.clientY < b.top || ev.clientY > b.bottom; };
+  document.addEventListener('mousedown', ev => { fondAppuye = ev.target === dlg && horsFenetre(ev); });
+  document.addEventListener('click', ev => {
+    if (ev.target === dlg) {   // le fond assombri ferme la fenêtre, mais seulement si le clic y a commencé (pas en fin de sélection d'un texte)
+      if (fondAppuye && horsFenetre(ev)) ACTIONS.non();
+      return;
+    }
+    const el = ev.target.closest('[data-a]');
+    if (!el || el.disabled) return;
+    if (el.tagName === 'A' && !('suivre' in el.dataset)) ev.preventDefault();   // « suivre » : le lien s'ouvre en plus de l'action
+    const fn = ACTIONS[el.dataset.a];
+    if (fn) fn(el, ev);
+  });
+  document.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('rect[data-a]')) { ev.preventDefault(); ACTIONS[ev.target.dataset.a](ev.target); } });
+  document.addEventListener('change', ev => { const el = ev.target.closest('[data-c]'); if (el && CHANGES[el.dataset.c]) CHANGES[el.dataset.c](el); });
+  document.addEventListener('input', ev => { const el = ev.target.closest('[data-saisie]'); if (el && SAISIES[el.dataset.saisie]) SAISIES[el.dataset.saisie](el); });
+  document.addEventListener('submit', ev => { ev.preventDefault(); const f = ev.target.closest('[data-f]'); if (f && FORMS[f.dataset.f]) FORMS[f.dataset.f](f); });
+  document.addEventListener('toggle', ev => { const d = ev.target; if (d && d.tagName === 'DETAILS' && d.id) F.ouverts[d.id] = d.open; }, true);
+  // Échap sur une confirmation : comme « Annuler », on revient à la fenêtre d'où l'on venait.
+  dlg.addEventListener('close', () => {
+    if (dlg.open) return;   // déjà rouverte par l'action qui vient de la fermer
+    const s = suite;
+    suite = null; dlg.innerHTML = '';
+    if (s && s.retour) s.retour();
+  });
+
+  // bulle d'information des graphiques
+  function montrerBulle(el, x, y) {
+    bulle.textContent = el.dataset.tip; bulle.hidden = false;
+    const b = bulle.getBoundingClientRect();
+    bulle.style.left = Math.max(8, Math.min(x + 12, window.innerWidth - b.width - 8)) + 'px';
+    bulle.style.top = Math.max(8, y - b.height - 12) + 'px';
+  }
+  document.addEventListener('mousemove', ev => { const el = ev.target.closest ? ev.target.closest('[data-tip]') : null; if (el) montrerBulle(el, ev.clientX, ev.clientY); else if (!bulle.hidden) bulle.hidden = true; });
+  document.addEventListener('focusin', ev => { const el = ev.target.closest ? ev.target.closest('[data-tip]') : null; if (el) { const b = el.getBoundingClientRect(); montrerBulle(el, b.left + b.width / 2, b.top + 24); } });
+  document.addEventListener('focusout', () => { bulle.hidden = true; });
+
+  window.addEventListener('resize', () => { clearTimeout(redessin); redessin = setTimeout(dessiner, 120); });
+  const reveil = () => { if (!document.hidden && !verrouille && auj() !== F.jour) rendre(); };
+  document.addEventListener('visibilitychange', reveil);
+  window.addEventListener('focus', reveil);
+  window.addEventListener('hashchange', () => {
+    const v = lire(location.hash.slice(1));
+    if (v.nom === vue.nom && v.id === vue.id) return;
+    vue = v; fermer(); if (!verrouille) rendre(); window.scrollTo(0, 0);
+  });
+  // Le livre modifié dans une autre fenêtre du même navigateur : on le recharge ici plutôt que de l'écraser au prochain clic.
+  window.addEventListener('storage', ev => {
+    if (ev.key === CLE_NOTES) { chargerNotes(); if (vue.nom === 'notes' && !dlg.open) rendre(); else majNotes(); return; }
+    if (ev.key !== CLE || !ev.newValue) return;
+    if (PROD) {
+      if (verrouille) { if (!!$('#mdp1') === !enveloppeGardee()) return; return rendre(); }   // l'écran verrouillé change de mode si un livre vient d'être créé ou effacé ailleurs
+      let env = null; try { env = JSON.parse(ev.newValue); } catch (x) { return; }
+      N.dechiffrerAvec(cle, env).then(t => { const o = lireEtat(t); if (o) { etat = o; fermer(); rendre(); toast('Le livre a été modifié dans une autre fenêtre : il est rechargé ici.'); } })
+        .catch(() => verrouiller('Le mot de passe a changé dans une autre fenêtre : entrez le nouveau.'));
+      return;
+    }
+    const o = lireEtat(ev.newValue);
+    if (!o) return;
+    etat = o; fermer(); rendre();
+    toast('Le livre a été modifié dans une autre fenêtre : il est rechargé ici.');
+  });
+
+  // ---------- démarrage ----------
+  const j0 = auj();
+  chargerNotes();
+  if (PROD) {
+    F.jour = j0; F.mois = F.synMois = j0.slice(0, 7);
+    rendre();
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {   // hors ligne et mises à jour
+      const avait = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!avait) return;
+        const b = $('#maj'); b.hidden = false;
+      });
+    }
+    return;
+  }
+  etat = charger();
+  if (!etat || (etat.demo && !etat.demo.modifie && etat.demo.genereLe !== j0)) { etat = N.donneesDemo(j0); sauver(); }
+  F.jour = j0; F.mois = F.synMois = j0.slice(0, 7);
+  vue = lire(location.hash.slice(1));
+  rendre();
+  if (ecarte) toast('Les données enregistrées n’ont pas pu être relues : elles sont mises de côté (Paramètres, Données) et le jeu d’exemple est affiché.', 'bad');
+})();
+</script>
+</body>
+</html>
